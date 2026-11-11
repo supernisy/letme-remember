@@ -16,6 +16,7 @@ import re
 from typing import Iterable, Protocol
 
 from . import store
+from .errors import ValidationError
 
 
 class Distiller(Protocol):
@@ -121,9 +122,37 @@ class LLMDistiller:
         return kept
 
 
+IMPORT_FIELDS = ("source_category", "original_date", "batch")
+
+
+def enforce_import_fields(candidates):
+    """蒸馏链路的必填字段完整性校验（入口拦截）。
+
+    蒸馏/批量导入产出的候选只要带任一导入字段（source_category /
+    original_date / batch），就必须三字段齐全；否则在写库前就抛错，
+    避免像历史那样缺 original_date 的候选一直漏到落库阶段才中断整批。
+
+    与 store.build_candidate 里「半导入」隐式判断不同，这里显式要求：
+    带任一导入字段 = 必须三字段齐全；三字段全空 = 视为人类手写，放行。
+    """
+    items = list(candidates)
+    for number, raw in enumerate(items, 1):
+        if not isinstance(raw, dict):
+            raise ValidationError("候选 %d 不是字典" % number)
+        present = [k for k in IMPORT_FIELDS if str(raw.get(k) or "").strip()]
+        if present and len(present) != len(IMPORT_FIELDS):
+            missing = [k for k in IMPORT_FIELDS if not str(raw.get(k) or "").strip()]
+            name = raw.get("name") or "(未命名)"
+            raise ValidationError(
+                "候选 %d（%s）导入字段不完整：缺失 %s，请回填后重试" % (
+                    number, name, "、".join(missing))
+            )
+    return items
+
+
 def run_candidates(candidates, paths, settings):
     """批量写入候选。原子预校验在前，任何一个不合法就整批不动磁盘。"""
-    items = list(candidates)
+    items = enforce_import_fields(candidates)
     store.prevalidate(items, settings)
     results = []
     for raw in items:
