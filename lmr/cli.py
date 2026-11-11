@@ -95,6 +95,10 @@ def _build_parser():
         help="自动去重合并落库：NOOP 丢、ADD 入、UPDATE 自动更、SUPERSEDE 停下待批")
     consolidate_cmd.add_argument("--candidates", required=True, help="候选数组的 JSON 文件")
     consolidate_cmd.add_argument("--batch", default="", help="导入批次标识（可选）")
+    consolidate_cmd.add_argument("--dry-run", dest="dry_run", action="store_true",
+                                 help="只判 action 不落库，输出分流统计报告（预览用）")
+    consolidate_cmd.add_argument("--limit", type=int, default=0,
+                                 help="只处理前 N 条候选（0=全部），用于分批")
 
     batch_cmd = sub.add_parser("batch-distill", parents=[common], help="用 LLM 批量蒸馏旧记忆文本")
     batch_cmd.add_argument("--file", required=True, help="待蒸馏的文本文件")
@@ -279,6 +283,9 @@ def cmd_consolidate(args):
     """
     paths, settings = _paths(args)
     candidates = _json_file(args.candidates, list)
+    if getattr(args, "limit", 0) > 0:
+        candidates = candidates[: args.limit]
+    dry_run = getattr(args, "dry_run", False)
     data_config = config._data_config(paths.root)
     try:
         idx = index.Index(paths, settings)
@@ -331,15 +338,19 @@ def cmd_consolidate(args):
                 "candidate": cand,
             })
         else:
-            # ADD 或 UPDATE：自动入库。走与常规写入完全相同的原子预校验 + git 审计。
-            outcome = store.record(paths, settings, cand)
+            # ADD 或 UPDATE：自动入库（dry-run 时只记录不落库）。
+            if not dry_run:
+                outcome = store.record(paths, settings, cand)
+                entry_id = outcome.get("id", "")
+            else:
+                entry_id = ""
             auto_applied.append({
                 "name": name,
                 "action": action,
-                "id": outcome.get("id", ""),
+                "id": entry_id,
             })
 
-    return {
+    result = {
         "auto_applied": len(auto_applied),
         "applied_items": auto_applied,
         "noop_dropped": len(noop_dropped),
@@ -347,7 +358,9 @@ def cmd_consolidate(args):
         "needs_review": len(needs_review),
         "review_items": needs_review,
         "degraded": degraded,
+        "dry_run": dry_run,
     }
+    return result
 
 
 def cmd_batch_distill(args):
