@@ -1,8 +1,9 @@
-## Purpose
+# store-layout Specification
 
+## Purpose
 定义记忆真相源在磁盘上的组织方式与文件格式契约：数据目录放在哪里、文件怎么命名、文件头有哪些字段、索引文件长什么样、失效条目如何归档、导入条目如何标注来源与原始时间，以及公开代码仓库与私有记忆数据之间的隔离边界。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 代码与记忆数据分离
 

@@ -1,8 +1,9 @@
-## Purpose
+# cli Specification
 
+## Purpose
 定义宿主与人读写长期记忆时所依赖的命令行接口契约：有哪些操作、每个操作的输入输出与错误行为、读路径不得调用大模型的约束，以及中文查询必须可召回的底线。这是多宿主接入同一份记忆仓库时唯一需要遵守的外部接口。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 命令行操作集
 
