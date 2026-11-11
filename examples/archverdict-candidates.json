@@ -1,0 +1,38 @@
+[
+  {
+    "name": "archverdict-github-auth-persisted",
+    "abstract": "本机 GitHub 鉴权已持久化打通，git push 无需每次申请权限",
+    "type": "procedure",
+    "conclusion": "本机 GitHub 鉴权已持久化打通：gh CLI 持有 classic PAT（存于 gh 自带 keyring），git 凭据经 gh auth git-credential 提供，日常 git push（含 .github/workflows/*.yml）自动可用，不再需要每次申请权限或走浏览器。",
+    "reason": "2026-09-01 打通后，后续所有涉及 git push/fetch/clone 的任务可直接复用，无需重复登录。",
+    "author": "supernisy",
+    "weight": 7,
+    "source_category": "workbuddy-project-memory",
+    "original_date": "2026-09-01",
+    "batch": "demo-archverdict"
+  },
+  {
+    "name": "archverdict-gh-cli-absolute-path",
+    "abstract": "调 gh CLI 需用绝对路径，PATH 不含 gh",
+    "type": "procedure",
+    "conclusion": "当前 Bash 会话 PATH 不含 gh，直接调 gh CLI 时须用绝对路径（gh.exe 位于用户级安装目录，已加入用户级 PATH，WorkBuddy 重启/新会话后可直接 gh）。",
+    "reason": "避免因 PATH 不含 gh 导致命令找不到；凭证助手同样依赖绝对路径。",
+    "author": "supernisy",
+    "weight": 5,
+    "source_category": "workbuddy-project-memory",
+    "original_date": "2026-09-01",
+    "batch": "demo-archverdict"
+  },
+  {
+    "name": "archverdict-sandbox-proxy-502",
+    "abstract": "沙箱出口代理对 CONNECT 隧道间歇返回 502，git 推送需重试",
+    "type": "experience",
+    "conclusion": "沙箱出口代理对 CONNECT 隧道间歇返回 502，git 推送需重试 1~3 次；git 仅在远端真正接受 ref 更新后才打印成功，502 不回滚已成功的推送。",
+    "reason": "实测发现代理间歇性 502，重试即可成功，不必误判为推送失败。",
+    "author": "supernisy",
+    "weight": 5,
+    "source_category": "workbuddy-project-memory",
+    "original_date": "2026-09-01",
+    "batch": "demo-archverdict"
+  }
+]
