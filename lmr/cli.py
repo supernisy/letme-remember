@@ -86,7 +86,7 @@ def _build_parser():
     distill_cmd.add_argument("--batch")
 
     propose = sub.add_parser("propose", parents=[common], help="生成内容变更类审批提案")
-    propose.add_argument("op", nargs="?", help="merge/split/supersede/delete/update_abstract")
+    propose.add_argument("op", nargs="?", help="merge/split/supersede/delete/purge/update_abstract")
     propose.add_argument("target", nargs="?", help="目标条目定位标识")
     propose.add_argument("--payload", help="附加参数的 JSON 字符串")
     propose.add_argument("--batch-file", dest="batch_file", help="批量提案的 JSON 数组文件")
@@ -102,6 +102,10 @@ def _build_parser():
 
     archive = sub.add_parser("archive", parents=[common], help="把失效条目移入归档目录")
     archive.add_argument("entry_id")
+
+    purge = sub.add_parser("purge", parents=[common], help="真正删除一条错误/无效记忆（需审批，不可逆）")
+    purge.add_argument("entry_id")
+    purge.add_argument("--reason", default="", help="删除原因（写入审计）")
 
     return root
 
@@ -251,6 +255,11 @@ def cmd_archive(args):
     return store.archive(paths, settings, args.entry_id)
 
 
+def cmd_purge(args):
+    paths, settings = _paths(args)
+    return store.purge(paths, settings, args.entry_id, reason=args.reason)
+
+
 HANDLERS = {
     "init": cmd_init,
     "record": cmd_record,
@@ -267,6 +276,7 @@ HANDLERS = {
     "undo": cmd_undo,
     "undo-batch": cmd_undo_batch,
     "archive": cmd_archive,
+    "purge": cmd_purge,
 }
 
 

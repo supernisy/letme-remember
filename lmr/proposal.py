@@ -19,10 +19,10 @@ DETERMINISTIC = frozenset({
     "normalize_date", "adjust_weight", "add_link", "dedupe_exact", "categorize",
 })
 APPROVAL_REQUIRED = frozenset({
-    "merge", "split", "supersede", "delete", "update_abstract",
+    "merge", "split", "supersede", "delete", "purge", "update_abstract",
 })
 MAX_PER_BATCH = {
-    "merge": 5, "split": 3, "supersede": 5, "delete": 3, "update_abstract": 5,
+    "merge": 5, "split": 3, "supersede": 5, "delete": 3, "purge": 3, "update_abstract": 5,
 }
 
 
@@ -110,7 +110,11 @@ def _apply_one(paths, settings, data):
     target = data["target"]
     payload = data["payload"]
     if operation == "delete":
+        # 软删除：只标失效，不物理删除（历史可查）；归档由 archive 命令单独执行。
         return store.invalidate(paths, settings, target)
+    if operation == "purge":
+        # 真删除：物理移除错误/无效记忆，不可逆，走审批（L2）。
+        return store.purge(paths, settings, target, reason=payload.get("reason", ""))
     if operation == "supersede":
         return store.invalidate(paths, settings, target, superseded_by=payload.get("by"))
     if operation == "update_abstract":

@@ -107,6 +107,17 @@ class TestWriteChain(MemTestCase):
         historical = idx.recall("会被取代的条目", as_of=earlier)
         self.assertTrue(any(hit["id"] == out["id"] for hit in historical))
 
+    def test_purge_truly_deletes(self):
+        # @req 3.8
+        out = self.make(name="错误条目")
+        path = Path(out["path"])
+        self.assertTrue(path.is_file())
+        result = store.purge(self.paths, self.settings, out["id"], reason="测试残留")
+        self.assertTrue(result["purged"])
+        self.assertFalse(path.exists())  # 物理删除，与 invalidate 的软失效不同
+        idx = index.Index(self.paths, self.settings)
+        self.assertFalse(idx.recall("错误条目"))  # 索引也不再返回
+
     def test_proposals_pending_applied_truncated(self):
         # @req 3.6
         out = self.make(name="提案目标")

@@ -249,6 +249,26 @@ def archive(paths, settings, entry_id):
     return {"id": entry_id, "archived": True, "path": str(target)}
 
 
+def purge(paths, settings, entry_id, reason=""):
+    """真正删除一条错误/无效记忆（与 invalidate 的软失效相对）。
+
+    用于「明显错误、纯属虚构、测试残留」的记忆，而非「曾正确后过时」的结论。
+    不可逆：物理移除文件 + 审计留痕 + 提交。调用方 MUST 先走审批（L2）。
+    """
+    path = _find_file(paths, entry_id)
+    if path.parent == paths.archive:
+        # 若已在归档目录，直接删除归档里的文件。
+        pass
+    os.remove(str(path))
+    _append_audit(paths, "purge", entry_id, [])
+    if reason:
+        with paths.audit.open("a", encoding="utf-8") as handle:
+            handle.write("%s\tpurge-reason\t%s\t%s\n" % (gitutil.now_iso(), entry_id, reason))
+    _sync_only(paths, settings)
+    gitutil.commit(paths.root, "purge %s" % entry_id)
+    return {"id": entry_id, "purged": True, "reason": reason}
+
+
 def undo(paths, settings):
     count = gitutil.undo_last(paths.root)
     _sync_only(paths, settings)
