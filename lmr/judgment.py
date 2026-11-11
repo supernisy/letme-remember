@@ -8,6 +8,10 @@
 体检报告字段（六触发器 + 补充维度）：
   conflict / high_impact / ambiguous / novel_type / compliance / uncertain
   + importance / confidence / missing
+
+v1.1 冲突检测增强（#10）：
+  conflict 字段升级为「冲突对象 + 建议操作」，显式判定
+  ADD / UPDATE / SUPERSEDE / NOOP，与时间轴（invalid_at / superseded_by）联动。
 """
 
 from __future__ import annotations
@@ -27,16 +31,19 @@ REPORT_KEYS = (
 IMPORTANCE_LEVELS = ("low", "medium", "high")
 CONFIDENCE_LEVELS = ("low", "medium", "high")
 
+# 冲突检测增强（#10）：建议操作四值。
+ACTIONS = ("ADD", "UPDATE", "SUPERSEDE", "NOOP")
+
 JUDGMENT_PROMPT = """你是记忆仓库的第二审质检员。对下面这条「候选记忆」做软判断，只输出一个 JSON 对象（不要任何多余文字、不要 markdown 代码块）。
 
 候选记忆：
 {payload}
 
-已有相似结论（可能为空）：
+已有相似结论（可能为空，每条带 id 定位）：
 {existing}
 
 请严格按以下 schema 输出，字段含义：
-- conflict: 布尔。候选是否与已有相似结论互相矛盾。
+- conflict: 对象或 null。候选与已有相似结论的关系判断。若无任何相似结论，输出 null；否则输出 {{"ids": ["冲突或重叠的已有条目 id"], "action": "UPDATE/SUPERSEDE/NOOP 之一"}}。action 含义：UPDATE=候选是已有结论的修正更新、SUPERSEDE=候选取代过时的已有结论（应联动 invalid_at/superseded_by 作废旧结论）、NOOP=候选与已有结论等价无需新增。若候选确与已有结论互相矛盾，ids 里列全部相关 id 且 action 用 UPDATE 或 SUPERSEDE。
 - high_impact: 布尔。是否为高影响/不可逆操作（删除、作废被多处引用的核心结论）。
 - ambiguous: 布尔。候选本身是否歧义或自相矛盾。
 - novel_type: 布尔。类型是否未定义过（type 不在 profile/preference/entity/event/decision/procedure/fact/experience/reference 之内）。
@@ -74,12 +81,38 @@ def parse_report(raw: str) -> dict:
     return data
 
 
+def _normalize_conflict(val) -> dict:
+    """归一化 conflict 字段为统一结构 {"ids": [...], "action": "..."}。
+
+    兼容两种输入形态：
+    - 布尔（旧格式 / 降级路径）：True → {"ids": [], "action": ""}，False → None；
+    - 对象（新格式 / LLM 增强）：{"ids": [...], "action": "ADD/UPDATE/SUPERSEDE/NOOP"}。
+    非法 action 或 ids 取安全默认（action 空串，ids 空列表）。
+    """
+    if val is None or val is False:
+        return None
+    if val is True:
+        return {"ids": [], "action": ""}
+    if isinstance(val, dict):
+        ids = val.get("ids") or []
+        if not isinstance(ids, list):
+            ids = []
+        ids = [str(i) for i in ids if i]
+        action = val.get("action") or ""
+        action = action if action in ACTIONS else ""
+        return {"ids": ids, "action": action}
+    # 其它非空值（如非空字符串）视为存在冲突但缺细节。
+    return {"ids": [], "action": ""}
+
+
 def validate_report(report: dict) -> dict:
     """校验并归一化体检报告，非法字段取安全默认值。"""
     clean = {}
     for key in REPORT_KEYS:
         val = report.get(key)
-        if key in ("conflict", "high_impact", "ambiguous", "novel_type", "compliance", "uncertain"):
+        if key == "conflict":
+            clean[key] = _normalize_conflict(val)
+        elif key in ("high_impact", "ambiguous", "novel_type", "compliance", "uncertain"):
             clean[key] = bool(val)
         elif key == "importance":
             clean[key] = val if val in IMPORTANCE_LEVELS else "low"
@@ -142,7 +175,7 @@ def rule_report(candidate: dict, existing: list[str]) -> dict:
     reason = candidate.get("reason", "") or ""
 
     report = {
-        "conflict": False,
+        "conflict": None,
         "high_impact": ctype in ("delete", "purge", "supersede", "invalidate"),
         "ambiguous": False,
         "novel_type": bool(ctype) and ctype not in valid_types,
@@ -158,3 +191,35 @@ def rule_report(candidate: dict, existing: list[str]) -> dict:
     elif not reason:
         report["missing"] = "缺理由"
     return report
+
+
+def find_related(index, candidate: dict, limit: int = 8) -> list[str]:
+    """检索库中与候选相似的已有结论，返回「id + 摘要」文本列表喂给 LLM 比对。
+
+    读路径零网络约束：只走本地 SQLite 索引（Index.recall），不调模型、不联网。
+    查询词取候选的 abstract + conclusion + name，命中后转成可读文本。
+    检索失败（如索引未建）时返回空列表，不阻断软判断流程。
+    """
+    abstract = (candidate.get("abstract") or "").strip()
+    conclusion = (candidate.get("conclusion") or "").strip()
+    name = (candidate.get("name") or "").strip()
+    # 查询词优先用摘要 + 名（精准），摘要为空才退回结论全文。
+    query = " ".join(x for x in (abstract, name) if x) or conclusion
+    if not query:
+        return []
+    try:
+        hits = index.recall(query, limit=limit)
+    except Exception:
+        return []
+    lines = []
+    for hit in hits:
+        ident = hit.get("id", "")
+        abstract_text = hit.get("abstract", "") or ""
+        type_text = hit.get("type", "") or ""
+        parts = [ident]
+        if type_text:
+            parts.append("[%s]" % type_text)
+        if abstract_text:
+            parts.append(abstract_text)
+        lines.append(" ".join(parts))
+    return lines

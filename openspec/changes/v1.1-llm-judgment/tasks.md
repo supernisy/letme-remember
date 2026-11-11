@@ -23,8 +23,8 @@
 
 ## 4. 冲突检测增强
 
-- [ ] 4.1 软判断时把候选与「检索出的相似已有结论」比对，产出 conflict 字段
-- [ ] 4.2 显式判断 ADD/UPDATE/SUPERSEDE/NOOP，与时间轴联动（后续细化）
+- [x] 4.1 软判断时把候选与「检索出的相似已有结论」比对，产出 conflict 字段
+- [x] 4.2 显式判断 ADD/UPDATE/SUPERSEDE/NOOP，与时间轴联动（后续细化）
 
 ## 5. 存量批量蒸馏
 
@@ -39,5 +39,5 @@
 
 ## 7. 测试
 
-- [x] 7.1 新增 `tests/test_llm_judgment.py`（19 项：报告解析/归一化/分级/降级/key 解析）
+- [x] 7.1 新增 `tests/test_llm_judgment.py`（30 项：报告解析/归一化/分级/降级/key 解析/冲突检测增强）
 - [x] 7.2 修正 `test_read_path_zero_model_zero_network` 收窄到读路径模块（LLM 是写路径）

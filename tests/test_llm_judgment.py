@@ -94,6 +94,80 @@ class TestRuleReport(unittest.TestCase):
         self.assertTrue(report["missing"])
 
 
+class TestConflictDetection(unittest.TestCase):
+    """冲突检测增强（#10）：conflict 字段归一化 + 相似结论检索。"""
+
+    def test_normalize_conflict_none(self):
+        self.assertIsNone(judgment._normalize_conflict(None))
+        self.assertIsNone(judgment._normalize_conflict(False))
+
+    def test_normalize_conflict_bool_true(self):
+        result = judgment._normalize_conflict(True)
+        self.assertEqual(result, {"ids": [], "action": ""})
+
+    def test_normalize_conflict_object(self):
+        result = judgment._normalize_conflict(
+            {"ids": ["a", "b"], "action": "SUPERSEDE"})
+        self.assertEqual(result, {"ids": ["a", "b"], "action": "SUPERSEDE"})
+
+    def test_normalize_conflict_bad_action_clamped(self):
+        result = judgment._normalize_conflict(
+            {"ids": ["a"], "action": "DELETE"})
+        self.assertEqual(result["action"], "")
+
+    def test_normalize_conflict_bad_ids_clamped(self):
+        result = judgment._normalize_conflict({"ids": "not-a-list", "action": "UPDATE"})
+        self.assertEqual(result["ids"], [])
+
+    def test_validate_report_conflict_object_passthrough(self):
+        report = judgment.validate_report({
+            "conflict": {"ids": ["x"], "action": "UPDATE"}, "importance": "low",
+            "confidence": "high", "missing": ""})
+        self.assertEqual(report["conflict"]["action"], "UPDATE")
+
+    def test_classify_conflict_object_triggers_l1(self):
+        report = judgment.validate_report({
+            "conflict": {"ids": ["x"], "action": "SUPERSEDE"},
+            "importance": "low", "confidence": "high"})
+        self.assertEqual(judgment.classify(report), "L1")
+
+    def test_find_related_empty_query(self):
+        result = judgment.find_related(None, {})
+        self.assertEqual(result, [])
+
+    def test_find_related_index_failure_degrades(self):
+        class BoomIndex:
+            def recall(self, query, limit):
+                raise RuntimeError("boom")
+        result = judgment.find_related(BoomIndex(), {"abstract": "求职城市", "name": "city"})
+        self.assertEqual(result, [])
+
+    def test_find_related_returns_readable_lines(self):
+        class FakeIndex:
+            def recall(self, query, limit):
+                return [
+                    {"id": "p1", "type": "preference", "abstract": "期望在北京工作"},
+                    {"id": "p2", "type": "preference", "abstract": "期望在上海工作"},
+                ]
+        result = judgment.find_related(FakeIndex(), {"abstract": "工作城市偏好", "name": "city"})
+        self.assertEqual(len(result), 2)
+        self.assertIn("p1", result[0])
+        self.assertIn("期望在北京工作", result[0])
+
+    def test_find_related_uses_abstract_over_conclusion(self):
+        seen = {}
+
+        class SpyIndex:
+            def recall(self, query, limit):
+                seen["query"] = query
+                return []
+        judgment.find_related(
+            SpyIndex(), {"abstract": "求职城市", "conclusion": "我以后想在北京发展", "name": "city"})
+        # 查询词应优先用 abstract + name，不含 conclusion 全文。
+        self.assertIn("求职城市", seen["query"])
+        self.assertNotIn("我以后想在北京发展", seen["query"])
+
+
 class TestResolveKey(unittest.TestCase):
     def test_env_priority(self):
         import os

@@ -224,19 +224,30 @@ def cmd_distill(args):
 
 
 def cmd_judge(args):
-    """对候选做软判断（第二审），产出体检报告 + 分级裁决。"""
+    """对候选做软判断（第二审），产出体检报告 + 分级裁决。
+
+    冲突检测增强（#10）：先用本地索引检索库中相似结论（零网络），
+    喂给 LLM 与候选比对，显式判定 ADD/UPDATE/SUPERSEDE/NOOP。
+    """
     paths, settings = _paths(args)
     candidates = _json_file(args.candidates, list)
     # 读数据目录私有配置（含 llm_key 等），不写公开仓库。
     data_config = config._data_config(paths.root)
+    # 检索索引复用 Index，读路径零网络；未初始化时降级为空比对。
+    try:
+        idx = index.Index(paths, settings)
+    except Exception:
+        idx = None
     results = []
     for cand in candidates:
+        # 检索库中相似结论（本地零网络），失败或索引未建则空列表。
+        existing = judgment.find_related(idx, cand) if idx is not None else []
         try:
             client = llm_module.make_client(settings, data_config)
-            report = judgment.judge(client, cand, [])
+            report = judgment.judge(client, cand, existing)
         except llm_module.LLMUnavailable:
             # 降级路径：LLM 不可用时用规则产出报告。
-            report = judgment.rule_report(cand, [])
+            report = judgment.rule_report(cand, existing)
         results.append({
             "name": cand.get("name"),
             "report": report,
