@@ -8,5 +8,9 @@
   "recency_decay_base": 0.5,
   "weight_min": 0.0,
   "weight_max": 10.0,
-  "allowlist_extra": []
+  "allowlist_extra": [],
+  "llm_enabled": false,
+  "llm_base_url": "",
+  "llm_model": "",
+  "llm_key": ""
 }

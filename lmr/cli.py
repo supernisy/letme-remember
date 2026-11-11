@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 
 from . import config, distill, index, proposal, store
+from . import llm as llm_module
+from . import judgment
 from .errors import EXIT_INTERNAL, EXIT_OK, EXIT_VALIDATION, MemError, NotFoundError, ValidationError
 
 CANDIDATE_FIELDS = (
@@ -84,6 +86,13 @@ def _build_parser():
     distill_cmd.add_argument("--source-category", dest="source_category")
     distill_cmd.add_argument("--original-date", dest="original_date")
     distill_cmd.add_argument("--batch")
+
+    judge_cmd = sub.add_parser("judge", parents=[common], help="对候选记忆做软判断并定级 L0/L1/L2")
+    judge_cmd.add_argument("--candidates", required=True, help="候选数组的 JSON 文件")
+
+    batch_cmd = sub.add_parser("batch-distill", parents=[common], help="用 LLM 批量蒸馏旧记忆文本")
+    batch_cmd.add_argument("--file", required=True, help="待蒸馏的文本文件")
+    batch_cmd.add_argument("--dry-run", dest="dry_run", action="store_true", help="只产出候选 JSON，不落库")
 
     propose = sub.add_parser("propose", parents=[common], help="生成内容变更类审批提案")
     propose.add_argument("op", nargs="?", help="merge/split/supersede/delete/purge/update_abstract")
@@ -214,6 +223,43 @@ def cmd_distill(args):
     return distill.run_candidates(candidates, paths, settings)
 
 
+def cmd_judge(args):
+    """对候选做软判断（第二审），产出体检报告 + 分级裁决。"""
+    paths, settings = _paths(args)
+    candidates = _json_file(args.candidates, list)
+    # 读数据目录私有配置（含 llm_key 等），不写公开仓库。
+    data_config = config._data_config(paths.root)
+    results = []
+    for cand in candidates:
+        try:
+            client = llm_module.make_client(settings, data_config)
+            report = judgment.judge(client, cand, [])
+        except llm_module.LLMUnavailable:
+            # 降级路径：LLM 不可用时用规则产出报告。
+            report = judgment.rule_report(cand, [])
+        results.append({
+            "name": cand.get("name"),
+            "report": report,
+            "level": judgment.classify(report),
+            "degraded": isinstance(report.get("confidence"), str) and report.get("confidence") == "low" and not any(
+                [report.get(k) for k in ("conflict", "high_impact", "ambiguous", "novel_type", "compliance", "uncertain")]),
+        })
+    return {"count": len(results), "items": results}
+
+
+def cmd_batch_distill(args):
+    """用 LLM 把一段旧文本蒸馏成候选，可选落库。"""
+    paths, settings = _paths(args)
+    data_config = config._data_config(paths.root)
+    text = Path(args.file).read_text(encoding="utf-8")
+    client = llm_module.make_client(settings, data_config)
+    distiller = distill.LLMDistiller(client)
+    candidates = distiller.distill(text)
+    if args.dry_run:
+        return {"count": len(candidates), "candidates": candidates}
+    return distill.run_candidates(candidates, paths, settings)
+
+
 def cmd_propose(args):
     paths, _ = _paths(args)
     if args.batch_file:
@@ -270,6 +316,8 @@ HANDLERS = {
     "list": cmd_list,
     "inject": cmd_inject,
     "distill": cmd_distill,
+    "judge": cmd_judge,
+    "batch-distill": cmd_batch_distill,
     "propose": cmd_propose,
     "apply": cmd_apply,
     "proposals": cmd_proposals,

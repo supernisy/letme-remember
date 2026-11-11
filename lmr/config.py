@@ -28,6 +28,11 @@ DEFAULT_SETTINGS = {
     "weight_min": 0.0,
     "weight_max": 10.0,
     "allowlist_extra": [],
+    # v1.1 LLM 软判断 / 批量蒸馏（默认关闭、不联网，key 只从私有来源读取）
+    "llm_enabled": False,
+    "llm_base_url": "",
+    "llm_model": "",
+    "llm_key": "",
 }
 
 

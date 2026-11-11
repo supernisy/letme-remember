@@ -82,8 +82,11 @@ class TestIndex(MemTestCase):
             self.assertTrue(self.idx().recall("离线检索"))
         finally:
             socket.socket = original
-        for source in (ROOT / "lmr").glob("*.py"):
-            text = source.read_text(encoding="utf-8")
+        # 读路径（检索）相关模块不得引入网络库；LLM 软判断/蒸馏是独立的写路径模块，
+        # 允许联网（v1.1 诉求），不在本约束范围内。
+        read_modules = ("index.py", "tokenizer.py", "frontmatter.py", "store.py")
+        for name in read_modules:
+            text = (ROOT / "lmr" / name).read_text(encoding="utf-8")
             for banned in ("import requests", "import openai", "urllib.request", "import httpx"):
                 self.assertNotIn(banned, text)
 
