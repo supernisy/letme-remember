@@ -24,9 +24,10 @@ from lmr import config, distill, llm
 
 WORKBUDDY = Path(r"C:\Users\super\WorkBuddy")
 CHUNK_BYTES = 12000  # 单块上限，超过按段落切（改小以避免大文件单块输出失控）
-# 原始档案（求职复盘/岗位分析）的已知根目录，用于 reference 路径回填。
+# 原始档案（求职复盘/岗位分析/项目开发案例）的搜索根目录，用于 reference 路径回填。
+# 案例原文散落在各个历史工作区，故搜索根是整个 WorkBuddy，而非单一 job-search 目录。
 ARCHIVE_ROOTS = [
-    Path(r"C:\Users\super\WorkBuddy\2026-09-23-15-46-13\job-search"),
+    Path(r"C:\Users\super\WorkBuddy"),
 ]
 
 
@@ -102,58 +103,77 @@ def run(client, text: str) -> list[dict]:
 
 
 def _extract_fname(conclusion: str) -> str:
-    """从 reference 的 conclusion 里提取文件名（形如 `xx.md` 或 `xx-YYYYMMDD.md`）。"""
-    m = re.search(r"([\w\u4e00-\u9fff｜\-]+\.md)", conclusion)
+    """从 reference 的 conclusion 里提取文件名（形如 `xx.md` 或 `xx-YYYYMMDD.md`）。
+
+    支持常见档案扩展名。文件名可能含空格、中文、`｜`、`-` 等。
+    """
+    m = re.search(r"([\w\u4e00-\u9fff｜\-]+\.(?:md|txt|docx|doc|pdf|mp4))", conclusion)
     return m.group(1) if m else ""
 
 
-def resolve_reference_path(candidate: dict) -> dict:
+# 原始档案常见扩展名（求职复盘 .md、需求文档 .docx、日志 .txt、成片 .mp4 等）。
+ARCHIVE_EXTS = (".md", ".txt", ".docx", ".doc", ".pdf", ".mp4")
+
+# 全盘文件名索引缓存：name -> [绝对路径, ...]，惰性构建一次，之后查表 O(1)。
+_name_index: dict[str, list[str]] | None = None
+
+
+def build_name_index() -> dict[str, list[str]]:
+    """全盘扫描档案根，建立「文件名（小写）→ 绝对路径列表」索引。
+
+    只在首次调用时构建，之后复用缓存。排除 .git / node_modules 等噪声目录。
+    """
+    global _name_index
+    if _name_index is not None:
+        return _name_index
+    idx: dict[str, list[str]] = {}
+    skip_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", ".idea", ".vscode"}
+    for root in ARCHIVE_ROOTS:
+        if not root.is_dir():
+            continue
+        for p in root.rglob("*"):
+            if not p.is_file():
+                continue
+            if p.suffix.lower() not in ARCHIVE_EXTS:
+                continue
+            # 跳过噪声目录
+            if any(part in skip_dirs for part in p.parts):
+                continue
+            idx.setdefault(p.name.lower(), []).append(str(p))
+    _name_index = idx
+    return idx
+
+
+def resolve_reference_path(candidate: dict, index: dict[str, list[str]] | None = None) -> dict:
     """给 reference 条目回填真实绝对路径（source 字段）。
 
-    策略：优先用 conclusion 里 LLM 抄的文件名精确匹配；匹配不到再用
-    ref_subject / abstract 里的关键词做文件名模糊匹配。都失败则 source 留空，
+    策略：优先用 conclusion 里 LLM 抄的文件名精确匹配（查全盘索引）；匹配不到
+    再用 ref_subject / abstract 里的关键词做文件名模糊匹配。都失败则 source 留空，
     由人审阶段兜底。保证不产出「LLM 瞎猜的死指针」。
     """
     if candidate.get("type") != "reference":
         return candidate
 
+    index = index if index is not None else build_name_index()
     conclusion = candidate.get("conclusion", "")
     fname = _extract_fname(conclusion)
     resolved = None
 
-    # 1) 精确文件名匹配（跨所有档案根目录）
+    # 1) 精确文件名匹配（查全盘索引，大小写不敏感）
     if fname:
-        for root in ARCHIVE_ROOTS:
-            if not root.is_dir():
-                continue
-            hit = root / fname
-            if hit.is_file():
-                resolved = str(hit)
-                break
-            # 也允许子目录里的同名文件
-            if not resolved:
-                for p in root.rglob(fname):
-                    if p.is_file():
-                        resolved = str(p)
-                        break
-                if resolved:
-                    break
+        hits = index.get(fname.lower(), [])
+        if hits:
+            resolved = hits[0]
 
     # 2) 关键词模糊匹配：用 subject/abstract 的汉字串去文件名里找
     if not resolved:
         subject = candidate.get("ref_subject") or candidate.get("abstract") or ""
-        # 提取连续汉字片段作为关键词
-        keys = re.findall(r"[\u4e00-\u9fff]{2,}", subject)
+        keys = [k for k in re.findall(r"[\u4e00-\u9fff]{2,}", subject) if len(k) >= 2]
         if keys:
-            for root in ARCHIVE_ROOTS:
-                if not root.is_dir():
-                    continue
-                for p in root.rglob("*.md"):
-                    name = p.name
-                    if any(k in name for k in keys if len(k) >= 2):
-                        resolved = str(p)
-                        break
-                if resolved:
+            for name_lower, paths in index.items():
+                # 文件名里含任一关键词即命中
+                if any(k in name_lower for k in keys):
+                    resolved = paths[0]
                     break
 
     if resolved:
@@ -195,6 +215,8 @@ def main():
 
     results = []
     failures = []
+    # 全盘文件名索引只建一次，复用到所有 reference 回填。
+    name_index = build_name_index()
     for it in items:
         rel = it["file"].replace("\\", "/")
         abs_path = WORKBUDDY / rel
@@ -220,7 +242,7 @@ def main():
                 c.setdefault("original_date", date)
             c.setdefault("batch", args.batch)
             # reference 条目：回填真实磁盘路径（不靠 LLM 猜）
-            c = resolve_reference_path(c)
+            c = resolve_reference_path(c, name_index)
             clean.append(c)
         results.append({"file": rel, "date": date, "count": len(clean), "candidates": clean})
         print("OK  %-60s  %d 条" % (rel, len(clean)), flush=True)
