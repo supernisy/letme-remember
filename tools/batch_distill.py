@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lmr import config, distill, llm
 
 WORKBUDDY = Path(r"C:\Users\super\WorkBuddy")
-CHUNK_BYTES = 20000  # 单块上限，超过按段落切
+CHUNK_BYTES = 12000  # 单块上限，超过按段落切（改小以避免大文件单块输出失控）
 
 
 def load_a_items(inventory_path: Path) -> list[dict]:
@@ -72,6 +72,7 @@ def main():
     parser.add_argument("--out", default=str(Path(r"C:\Users\super\WorkBuddy\2026-11-10-20-12-59\distill-candidates.json")))
     parser.add_argument("--data-dir", default=None, help="记忆数据目录（默认 ~/.letme-remember/data）")
     parser.add_argument("--limit", type=int, default=0, help="只处理前 N 个文件（0=全部），用于小样本试蒸")
+    parser.add_argument("--only", default="", help="只处理文件名包含该子串的文件（重蒸用）")
     parser.add_argument("--batch", default="import-legacy-batch-01", help="导入批次标识")
     args = parser.parse_args()
 
@@ -81,6 +82,8 @@ def main():
     client = llm.make_client(settings, data_config)
 
     items = load_a_items(Path(args.inventory))
+    if args.only:
+        items = [it for it in items if args.only in it["file"]]
     if args.limit > 0:
         items = items[: args.limit]
 
