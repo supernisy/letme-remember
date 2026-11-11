@@ -48,7 +48,15 @@ DISTILL_PROMPT = """你是记忆蒸馏器。把下面这段「旧记忆/日志�
 - 只产出「未来跨会话还会用得上」的内容。每写一条前自问：删掉这条会不会后悔？不会后悔的就不写。
 - 同一主题的多条碎片 MUST 合并成一条，禁止把一件事拆成好几条。
 - 以下内容不单独产结论，只在上一条「案例索引」里被覆盖：某次面试/会议的问答逐字稿、当天做了什么、岗位的具体判断、碎片化技术名词解释、空洞的「XX 的核心在于 XX」套话。
-- 一段文本通常只值得产出 1~6 条。宁可只产出 0 条，也不要凑数。
+- **每条 MUST 额外带一个 importance 字段**（整数 1~5，5=跨会话长期关键，1=边缘可弃）。代码会按 importance 截断，所以请如实给分：只有真正关键的才给 4~5，一般的给 3，边缘的给 1~2。
+
+**正例（该产出）**：
+- 「求职薪资三个数（期望/底线/可接受）不能混写」→ 一条 experience，importance=5
+- 「长鑫二面离职原因被追问的完整过程」→ 一条 reference 索引指向原文，importance=4
+
+**反例（不该产出）**：
+- 「今天下午修了 X 的 bug，改了几行代码」→ 不产，这是一次性流水
+- 「A2UI 的核心难点在于多通道仲裁」「A2UI 的核心判据是……」→ 不产，这是空洞套话
 
 3. 只输出 JSON 数组，不要任何多余文字、不要 markdown 代码块。
 
@@ -68,10 +76,21 @@ def _extract_json_array(raw: str) -> list:
 
 
 class LLMDistiller:
-    """接真实 LLM 的蒸馏器：长文本 → 候选记忆列表。"""
+    """接真实 LLM 的蒸馏器：长文本 → 候选记忆列表。
 
-    def __init__(self, client):
+    改进点（v1.1 后期）：
+    - response_format=json_object 强制 JSON，减少畸形输出；
+    - 每条候选带 importance（1~5），代码按阈值截断，把「挑哪些」的
+      裁决权从模型直觉收回到代码确定性。
+    """
+
+    # 代码层截断阈值：importance 低于此值的候选直接丢弃（不落库、不产出）。
+    IMPORTANCE_MIN = 3
+
+    def __init__(self, client, importance_min: int | None = None):
         self.client = client
+        if importance_min is not None:
+            self.IMPORTANCE_MIN = importance_min
 
     def distill(self, text: str) -> list[dict]:
         raw = self.client.chat(
@@ -79,8 +98,27 @@ class LLMDistiller:
              {"role": "user", "content": DISTILL_PROMPT.format(text=text)}],
             temperature=0.0,
             max_tokens=4096,
+            response_format={"type": "json_object"},
         )
-        return _extract_json_array(raw)
+        candidates = _extract_json_array(raw)
+        return self._filter_by_importance(candidates)
+
+    def _filter_by_importance(self, candidates: list[dict]) -> list[dict]:
+        """按 importance 截断：低于阈值的丢弃；importance 字段从落库候选里剥掉。"""
+        kept = []
+        for c in candidates:
+            if not isinstance(c, dict):
+                continue
+            imp = c.get("importance", self.IMPORTANCE_MIN)
+            try:
+                imp = int(imp)
+            except (TypeError, ValueError):
+                imp = self.IMPORTANCE_MIN
+            if imp < self.IMPORTANCE_MIN:
+                continue
+            c.pop("importance", None)  # 内部字段，不落库
+            kept.append(c)
+        return kept
 
 
 def run_candidates(candidates, paths, settings):

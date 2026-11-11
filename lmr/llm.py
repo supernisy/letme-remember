@@ -33,8 +33,13 @@ class LLMClient:
         self.api_key = api_key
         self.timeout = timeout
 
-    def chat(self, messages, temperature=0.0, max_tokens=2048):
-        """发一轮对话，返回助手文本内容（忽略 reasoning_content）。"""
+    def chat(self, messages, temperature=0.0, max_tokens=2048, response_format=None):
+        """发一轮对话，返回助手文本内容（忽略 reasoning_content）。
+
+        response_format 可选：传 {"type": "json_object"} 强制 JSON 输出；
+        传 {"type": "json_schema", "json_schema": {...}} 强制符合给定 schema。
+        某些网关可能不支持，失败时由上层降级（正则兜底解析）。
+        """
         url = self.base_url + "/chat/completions"
         payload = {
             "model": self.model,
@@ -42,6 +47,8 @@ class LLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if response_format:
+            payload["response_format"] = response_format
         req = urllib.request.Request(
             url,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
