@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "note": "所有样例均为虚构或公开的无效测试值，不含任何真实凭据。A 类强制打码，B 类默认只告警。C 类叙述性私人事实不进本规则表。",
+  "allowlist": ["PLACEHOLDER_VALUE", "REDACTED", "EXAMPLE_ONLY"],
+  "rules": [
+    {
+      "id": "R-CRED-01",
+      "class": "A",
+      "description": "已知厂商密钥前缀",
+      "pattern": "(?:AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|sk-(?:sp-)?[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|xai-[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{30,}|gsk_[A-Za-z0-9]{30,}|(?:sk|rk)_live_[0-9A-Za-z]{16,})",
+      "check": "regex",
+      "positive": "AKIA0000000000000000",
+      "negative": "AKIA_TOO_SHORT"
+    },
+    {
+      "id": "R-CRED-02",
+      "class": "A",
+      "description": "PEM 私钥整块",
+      "pattern": "(?s)-----BEGIN (?:RSA |EC |OPENSSH |DSA |)PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH |DSA |)PRIVATE KEY-----",
+      "check": "regex",
+      "positive": "-----BEGIN PRIVATE KEY-----\nZERO_PLACEHOLDER\n-----END PRIVATE KEY-----",
+      "negative": "PRIVATE KEY 是一个普通词组"
+    },
+    {
+      "id": "R-CRED-03",
+      "class": "A",
+      "description": "三段式令牌（JWT 形状）",
+      "pattern": "\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b",
+      "check": "regex",
+      "positive": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ6ZXJvIn0.0000000000000000",
+      "negative": "eyJhbGciOiJIUzI1NiJ9.only.two"
+    },
+    {
+      "id": "R-CRED-04",
+      "class": "A",
+      "description": "带凭据的数据库连接串",
+      "pattern": "\\b(?:postgres(?:ql)?|mysql|mongodb(?:\\+srv)?|redis|amqps?|mssql)://[^\\s:/@]+:[^\\s/@]+@",
+      "check": "regex",
+      "positive": "postgres://user:zeropass@db.invalid:5432/app",
+      "negative": "postgres://db.invalid:5432/app"
+    },
+    {
+      "id": "R-CRED-05",
+      "class": "A",
+      "description": "通用密钥赋值",
+      "pattern": "(?i)\\b(?:api[_-]?key|apikey|secret|password|passwd|token|auth[_-]?token|client[_-]?secret|access[_-]?key)\\s*[:=]\\s*[\"']?([^\\s\"',;]{6,})",
+      "redact_group": 1,
+      "check": "regex",
+      "positive": "api_key: zerovalue000",
+      "negative": "api_key 这个概念出现在说明文字里"
+    },
+    {
+      "id": "R-CRED-06",
+      "class": "A",
+      "description": "高熵随机串（Base64/Hex，长度下限 + 熵复核）",
+      "pattern": "(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{40,}={0,2}(?![A-Za-z0-9+/=])",
+      "check": "entropy",
+      "threshold": 3.5,
+      "positive": "aB3dE5gH7jK9mN2pQ4rS6tV8xY0zC1wE3uF5iO7pA9sD2",
+      "negative": "000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "R-CRED-07",
+      "class": "A",
+      "description": "Bearer 与会话令牌",
+      "pattern": "(?i)\\bBearer\\s+[A-Za-z0-9._-]{20,}\\b",
+      "check": "regex",
+      "positive": "Bearer 0000000000000000000000000000",
+      "negative": "Bearer 概念说明"
+    },
+    {
+      "id": "R-CRED-08",
+      "class": "A",
+      "description": "客户端密钥与刷新令牌赋值",
+      "pattern": "(?i)\\b(?:client_secret|refresh_token|session_token)\\s*[:=]\\s*[\"']?([^\\s\"',;]{12,})",
+      "redact_group": 1,
+      "check": "regex",
+      "positive": "client_secret: zero0000000000",
+      "negative": "client_secret 的字段名说明"
+    },
+    {
+      "id": "R-ID-01",
+      "class": "B",
+      "description": "卡号（含 Luhn 校验和复核）",
+      "pattern": "\\b(?:\\d[ -]?){13,19}\\b",
+      "check": "luhn",
+      "positive": "4111 1111 1111 1111",
+      "negative": "1234 5678 9012 3456"
+    },
+    {
+      "id": "R-ID-02",
+      "class": "B",
+      "description": "IBAN（含 mod-97 复核）",
+      "pattern": "\\b[A-Z]{2}\\d{2}[A-Z0-9]{11,30}\\b",
+      "check": "iban",
+      "positive": "GB82WEST12345698765432",
+      "negative": "GB00WEST12345698765432"
+    },
+    {
+      "id": "R-ID-03",
+      "class": "B",
+      "description": "邮箱地址",
+      "pattern": "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+      "check": "regex",
+      "positive": "demo@example.invalid",
+      "negative": "not-an-email"
+    },
+    {
+      "id": "R-ID-04",
+      "class": "B",
+      "description": "手机号",
+      "pattern": "(?<!\\d)(?:\\+?86[- ]?)?1[3-9]\\d{9}(?!\\d)",
+      "check": "regex",
+      "positive": "13800138000",
+      "negative": "12345"
+    },
+    {
+      "id": "R-ID-05",
+      "class": "B",
+      "description": "IPv4 地址",
+      "pattern": "\\b(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\b",
+      "check": "regex",
+      "positive": "192.168.1.10",
+      "negative": "999.999.999.999"
+    },
+    {
+      "id": "R-ID-06",
+      "class": "B",
+      "description": "MAC 地址",
+      "pattern": "\\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\\b",
+      "check": "regex",
+      "positive": "00:1A:2B:3C:4D:5E",
+      "negative": "00:1A:2B"
+    },
+    {
+      "id": "R-ID-07",
+      "class": "B",
+      "description": "UUID",
+      "pattern": "\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b",
+      "check": "regex",
+      "positive": "00000000-0000-4000-8000-000000000000",
+      "negative": "not-a-uuid"
+    },
+    {
+      "id": "R-ID-08",
+      "class": "B",
+      "description": "加密货币地址",
+      "pattern": "\\b(?:0x[a-fA-F0-9]{40}|bc1[a-z0-9]{25,}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})\\b",
+      "check": "regex",
+      "positive": "0x0000000000000000000000000000000000000000",
+      "negative": "0x1234"
+    },
+    {
+      "id": "R-ID-09",
+      "class": "B",
+      "description": "URL 中的凭据参数",
+      "pattern": "(?i)[?&](?:access_token|api_key|token|password|key|secret)=[^&\\s]{6,}",
+      "check": "regex",
+      "positive": "https://example.invalid/x?api_key=zero000000",
+      "negative": "https://example.invalid/x?page=1"
+    }
+  ]
+}
