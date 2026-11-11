@@ -35,6 +35,37 @@ def load_a_items(inventory_path: Path) -> list[dict]:
     return [it for it in data["items"] if it["category"] == "A"]
 
 
+# 真实密钥值（仅用于「排除」——含密钥的文件禁止送进 LLM，避免泄露）。
+# 业界公认前缀 + 长随机串。分类的「结论 vs 流水」不再靠正则，交给 LLM 蒸馏时判断。
+REAL_SECRET_RE = re.compile(
+    r"sk-[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
+    r"xox[baprs]-[A-Za-z0-9-]{10,}|github_pat_[A-Za-z0-9_]{20,}|"
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
+)
+
+
+def scan_files() -> list[dict]:
+    """直接扫描所有 WorkBuddy 项目级记忆文件，不做「结论 vs 流水」正则分类。
+
+    只做一件事：排除含真实密钥值的文件（SECRET，禁止送 LLM）。其余全部
+    交给 LLM 蒸馏——LLM 在蒸馏时自然完成「结论 vs 流水」判断，流水文件
+    蒸出 0 条候选，无需脚本预先分类。
+    """
+    items = []
+    for p in WORKBUDDY.rglob(".workbuddy/memory/*.md"):
+        if not p.is_file():
+            continue
+        try:
+            text = p.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if REAL_SECRET_RE.search(text):
+            continue  # 含密钥值，跳过，不进 LLM
+        rel = str(p.relative_to(WORKBUDDY))
+        items.append({"file": rel, "bytes": len(text.encode("utf-8"))})
+    return items
+
+
 def _split_chunks(text: str, limit: int = CHUNK_BYTES) -> list[str]:
     """按字节上限切块，优先在段落边界（空行）切开，避免切断一行。"""
     if len(text.encode("utf-8")) <= limit:
@@ -137,6 +168,7 @@ def resolve_reference_path(candidate: dict) -> dict:
 def main():
     parser = argparse.ArgumentParser(description="批量蒸馏旧记忆文件（dry-run）")
     parser.add_argument("--inventory", default=str(Path(r"C:\Users\super\WorkBuddy\2026-11-10-20-12-59\盘点清单.json")))
+    parser.add_argument("--scan", action="store_true", help="直接扫描全部 memory 文件（跳过正则分类，只排除含密钥值文件），结论/流水的判断交给 LLM 蒸馏")
     parser.add_argument("--out", default=str(Path(r"C:\Users\super\WorkBuddy\2026-11-10-20-12-59\distill-candidates.json")))
     parser.add_argument("--data-dir", default=None, help="记忆数据目录（默认 ~/.letme-remember/data）")
     parser.add_argument("--limit", type=int, default=0, help="只处理前 N 个文件（0=全部），用于小样本试蒸")
@@ -152,7 +184,10 @@ def main():
         settings["llm_model"] = args.model
     client = llm.make_client(settings, data_config)
 
-    items = load_a_items(Path(args.inventory))
+    if args.scan:
+        items = scan_files()
+    else:
+        items = load_a_items(Path(args.inventory))
     if args.only:
         items = [it for it in items if args.only in it["file"]]
     if args.limit > 0:
