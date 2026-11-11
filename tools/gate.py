@@ -34,9 +34,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
-TASKS = ROOT / "openspec" / "changes" / "v1-core-loop" / "tasks.md"
-CHANGE_SPECS = ROOT / "openspec" / "changes" / "v1-core-loop" / "specs"
-PROPOSAL = ROOT / "openspec" / "changes" / "v1-core-loop" / "proposal.md"
+# v1-core-loop 已归档，路径动态解析：优先归档前位置，找不到则落到 archive 目录。
+def _resolve_change_path(*parts):
+    live = ROOT / "openspec" / "changes" / "v1-core-loop" / Path(*parts)
+    if live.exists():
+        return live
+    archived = list((ROOT / "openspec" / "changes" / "archive").glob("*v1-core-loop"))
+    if archived:
+        return archived[0] / Path(*parts)
+    return live
+TASKS = _resolve_change_path("tasks.md")
+CHANGE_SPECS = _resolve_change_path("specs")
+PROPOSAL = _resolve_change_path("proposal.md")
 SIGNOFF = ROOT / "docs" / "spec-gate" / "signoff.json"
 
 SENSITIVE_WORDS = re.compile(r"薪资|职业定位|谈判口径|全栈|前端岗|月薪")
