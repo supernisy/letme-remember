@@ -167,6 +167,32 @@ class TestConflictDetection(unittest.TestCase):
         self.assertIn("求职城市", seen["query"])
         self.assertNotIn("我以后想在北京发展", seen["query"])
 
+    # ---- decide_action：自动去重分流的裁决依据 ----
+
+    def test_decide_action_no_conflict_is_add(self):
+        self.assertEqual(judgment.decide_action({"conflict": None}), "ADD")
+        self.assertEqual(judgment.decide_action({}), "ADD")
+
+    def test_decide_action_reads_conflict_action(self):
+        self.assertEqual(
+            judgment.decide_action({"conflict": {"ids": ["x"], "action": "SUPERSEDE"}}),
+            "SUPERSEDE")
+        self.assertEqual(
+            judgment.decide_action({"conflict": {"ids": ["x"], "action": "NOOP"}}),
+            "NOOP")
+
+    def test_decide_action_bad_action_falls_back_add(self):
+        # 非法 action 已在 _normalize_conflict 钳成空串，这里兜底为 ADD。
+        self.assertEqual(
+            judgment.decide_action({"conflict": {"ids": [], "action": ""}}),
+            "ADD")
+
+    def test_decide_action_bool_true_conflict_no_action(self):
+        # 降级路径 conflict=True 时无 action，视为 ADD（宁可新增也不误丢）。
+        self.assertEqual(
+            judgment.decide_action({"conflict": {"ids": [], "action": ""}}),
+            "ADD")
+
 
 class TestResolveKey(unittest.TestCase):
     def test_env_priority(self):

@@ -43,7 +43,12 @@ JUDGMENT_PROMPT = """你是记忆仓库的第二审质检员。对下面这条�
 {existing}
 
 请严格按以下 schema 输出，字段含义：
-- conflict: 对象或 null。候选与已有相似结论的关系判断。若无任何相似结论，输出 null；否则输出 {{"ids": ["冲突或重叠的已有条目 id"], "action": "UPDATE/SUPERSEDE/NOOP 之一"}}。action 含义：UPDATE=候选是已有结论的修正更新、SUPERSEDE=候选取代过时的已有结论（应联动 invalid_at/superseded_by 作废旧结论）、NOOP=候选与已有结论等价无需新增。若候选确与已有结论互相矛盾，ids 里列全部相关 id 且 action 用 UPDATE 或 SUPERSEDE。
+- conflict: 对象或 null。候选与已有相似结论的关系判断。若无任何相似结论，输出 null；否则输出 {{"ids": ["冲突或重叠的已有条目 id"], "action": "ADD/UPDATE/SUPERSEDE/NOOP 之一"}}。action 判定标准（务必区分 UPDATE 与 SUPERSEDE）：
+  * NOOP：候选与已有结论语义等价（换个说法说同一件事），无需新增。
+  * UPDATE：候选是已有结论的**补充、细化或延伸**，二者不矛盾，可并存。例如已有「杭州优先」，候选「补充：薪资分城市」。
+  * SUPERSEDE：候选**推翻/取代**已有结论，二者在语义上互相矛盾、不能并存。例如已有「只看杭州」，候选「改为上海优先」。凡新结论使旧结论不再成立，一律用 SUPERSEDE 而非 UPDATE。
+  * ADD：候选是库里没有的全新结论（此时应输出 null 而非带 ADD 的对象；只有确需显式声明时才用）。
+  判定口诀：新结论与旧结论「能并存=UPDATE，不能并存=SUPERSEDE」。
 - high_impact: 布尔。是否为高影响/不可逆操作（删除、作废被多处引用的核心结论）。
 - ambiguous: 布尔。候选本身是否歧义或自相矛盾。
 - novel_type: 布尔。类型是否未定义过（type 不在 profile/preference/entity/event/decision/procedure/fact/experience/reference 之内）。
@@ -191,6 +196,20 @@ def rule_report(candidate: dict, existing: list[str]) -> dict:
     elif not reason:
         report["missing"] = "缺理由"
     return report
+
+
+def decide_action(report: dict) -> str:
+    """从体检报告里取出「建议操作」，缺省返回 ADD。
+
+    这是自动去重分流的裁决依据：LLM 产出的 conflict.action 决定
+    候选该 ADD / UPDATE / SUPERSEDE / NOOP。报告里没有 conflict
+    （即无相似结论）时视为全新，返回 ADD。
+    """
+    conflict = report.get("conflict")
+    if not conflict:
+        return "ADD"
+    action = conflict.get("action") or ""
+    return action if action in ACTIONS else "ADD"
 
 
 def find_related(index, candidate: dict, limit: int = 8) -> list[str]:

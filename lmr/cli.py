@@ -90,6 +90,12 @@ def _build_parser():
     judge_cmd = sub.add_parser("judge", parents=[common], help="对候选记忆做软判断并定级 L0/L1/L2")
     judge_cmd.add_argument("--candidates", required=True, help="候选数组的 JSON 文件")
 
+    consolidate_cmd = sub.add_parser(
+        "consolidate", parents=[common],
+        help="自动去重合并落库：NOOP 丢、ADD 入、UPDATE 自动更、SUPERSEDE 停下待批")
+    consolidate_cmd.add_argument("--candidates", required=True, help="候选数组的 JSON 文件")
+    consolidate_cmd.add_argument("--batch", default="", help="导入批次标识（可选）")
+
     batch_cmd = sub.add_parser("batch-distill", parents=[common], help="用 LLM 批量蒸馏旧记忆文本")
     batch_cmd.add_argument("--file", required=True, help="待蒸馏的文本文件")
     batch_cmd.add_argument("--dry-run", dest="dry_run", action="store_true", help="只产出候选 JSON，不落库")
@@ -258,6 +264,92 @@ def cmd_judge(args):
     return {"count": len(results), "items": results}
 
 
+def cmd_consolidate(args):
+    """自动去重合并落库（v1.1 #12 的落库策略）。
+
+    对每条候选：检索相似结论 → LLM 判 ADD/UPDATE/SUPERSEDE/NOOP →
+    按用户拍板的策略分流：
+      - NOOP       等价重复，自动丢弃；
+      - ADD        全新结论，自动入库；
+      - UPDATE     修正已有，自动入库（新条目成为最新真相，旧条目靠时间轴收敛）；
+      - SUPERSEDE  取代过时结论（真冲突），**停下待人批**，不落库。
+
+    返回报告：自动处理数 + 待审批的真冲突清单。真冲突是唯一需要
+    用户人工拍板的，其余全自动，避免几百条候选逐个手审。
+    """
+    paths, settings = _paths(args)
+    candidates = _json_file(args.candidates, list)
+    data_config = config._data_config(paths.root)
+    try:
+        idx = index.Index(paths, settings)
+    except Exception:
+        idx = None
+
+    auto_applied = []      # 已自动处理（ADD/UPDATE）
+    noop_dropped = []      # 等价重复，丢弃
+    needs_review = []      # 真冲突（SUPERSEDE），待人批
+    degraded = 0           # 降级次数（LLM 不可用）
+
+    for cand in candidates:
+        existing = judgment.find_related(idx, cand) if idx is not None else []
+        try:
+            client = llm_module.make_client(settings, data_config)
+            report = judgment.judge(client, cand, existing)
+        except llm_module.LLMUnavailable:
+            report = judgment.rule_report(cand, existing)
+            degraded += 1
+
+        action = judgment.decide_action(report)
+        name = cand.get("name", "")
+
+        if action == "NOOP":
+            noop_dropped.append({"name": name, "abstract": cand.get("abstract", "")})
+        elif action == "SUPERSEDE":
+            # 真冲突（新结论推翻旧结论）：停下交人批。附上被取代旧条目的摘要，
+            # 供用户拍板「是否作废这些旧条目」。不作废、不自动入库。
+            conflict = report.get("conflict") or {}
+            supersede_ids = conflict.get("ids", [])
+            supersede_entries = []
+            for sid in supersede_ids:
+                try:
+                    text = store.show(paths, sid)
+                    import re as _re
+                    m = _re.search(r"^abstract:\s*(.+)$", text, _re.MULTILINE)
+                    supersede_entries.append({
+                        "id": sid,
+                        "abstract": m.group(1).strip() if m else "",
+                    })
+                except Exception:
+                    supersede_entries.append({"id": sid, "abstract": ""})
+            needs_review.append({
+                "name": name,
+                "abstract": cand.get("abstract", ""),
+                "conclusion": cand.get("conclusion", ""),
+                "reason": cand.get("reason", ""),
+                "type": cand.get("type", ""),
+                "supersede_entries": supersede_entries,
+                "candidate": cand,
+            })
+        else:
+            # ADD 或 UPDATE：自动入库。走与常规写入完全相同的原子预校验 + git 审计。
+            outcome = store.record(paths, settings, cand)
+            auto_applied.append({
+                "name": name,
+                "action": action,
+                "id": outcome.get("id", ""),
+            })
+
+    return {
+        "auto_applied": len(auto_applied),
+        "applied_items": auto_applied,
+        "noop_dropped": len(noop_dropped),
+        "noop_items": noop_dropped,
+        "needs_review": len(needs_review),
+        "review_items": needs_review,
+        "degraded": degraded,
+    }
+
+
 def cmd_batch_distill(args):
     """用 LLM 把一段旧文本蒸馏成候选，可选落库。"""
     paths, settings = _paths(args)
@@ -328,6 +420,7 @@ HANDLERS = {
     "inject": cmd_inject,
     "distill": cmd_distill,
     "judge": cmd_judge,
+    "consolidate": cmd_consolidate,
     "batch-distill": cmd_batch_distill,
     "propose": cmd_propose,
     "apply": cmd_apply,
