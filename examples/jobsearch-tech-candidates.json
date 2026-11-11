@@ -13,11 +13,11 @@
     "batch": "import-jobsearch-01"
   },
   {
-    "name": "jobsearch-salary-gate",
-    "abstract": "对外年包门禁，低于阈值只练手不投",
+    "name": "jobsearch-threshold-gate",
+    "abstract": "对外回报有心理门槛，低于阈值只练手不投",
     "type": "preference",
-    "conclusion": "薪资门禁：对外年包有心理门槛（低于门槛→练手档，不投，仅练手）；中值对门槛的达成率计入匹配分。",
-    "reason": "用户稳定偏好；薪资是谈判信息，属私人底牌，只记门禁逻辑不对外泄露具体数字。",
+    "conclusion": "回报门槛：对外年包有心理门槛（低于门槛→练手档，不投，仅练手）；中值对门槛的达成率计入匹配分。",
+    "reason": "用户稳定偏好；回报预期是谈判信息，属私人底牌，只记门禁逻辑不对外泄露具体数字。",
     "author": "import:workbuddy-memory",
     "weight": 8,
     "valid_from": "2026-10-15",
@@ -27,9 +27,9 @@
   },
   {
     "name": "jobsearch-direction-gate",
-    "abstract": "方向门禁：AI端到端全栈优先，低代码/贴牌AI岗跳过",
+    "abstract": "方向门禁：AI端到端工程优先，低代码/贴牌AI岗跳过",
     "type": "preference",
-    "conclusion": "方向门禁：AI 端到端全栈（React/TS/Node + Agent/MCP/Tool Use/A2UI）优先；低代码=前 AI 时代非目标（降档）；无 AI 实词的「AI 前端」贴牌岗直接跳过。",
+    "conclusion": "方向门禁：AI 端到端工程（React/TS/Node + Agent/MCP/Tool Use/A2UI）优先；低代码=前 AI 时代非目标（降档）；无 AI 实词的「AI 前端」贴牌岗直接跳过。",
     "reason": "用户核心定位是 Agent 工程化 + AI 研发效能工具链，方向门禁决定投递优先级。",
     "author": "import:workbuddy-memory",
     "weight": 9,

@@ -1,0 +1,11 @@
+{
+  "by": "supernisy",
+  "recorded_at": "2026-11-11T11:37:51+08:00",
+  "note": "对既有人工批准的证据固化；批准权属于人，脚本不产生批准决定。任一被批准文件变更都会使本记录失效，需重新确认。",
+  "files": {
+    "openspec/changes/v1-core-loop/proposal.md": "c6ad9de5c20acfda673919b8df18155c4e55731236984285049c2cbcb1cdd72e",
+    "openspec/changes/v1-core-loop/specs/cli/spec.md": "3eb92e15b3cd542707df20adda41da135e502879a77fb67c361f2e12e5f2ed6c",
+    "openspec/changes/v1-core-loop/specs/store-layout/spec.md": "5aeb0665257ce62d4cad85b3f2a5c80f86a98e852fafffcc66441e8ef6cbb49a",
+    "openspec/changes/v1-core-loop/specs/write-approval/spec.md": "8e3ca93edb888fd8baff0a6a3251037cd85b6ad6223f7d6502efa2a570623ba3"
+  }
+}
