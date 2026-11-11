@@ -212,12 +212,13 @@ def decide_action(report: dict) -> str:
     return action if action in ACTIONS else "ADD"
 
 
-def find_related(index, candidate: dict, limit: int = 8) -> list[str]:
-    """检索库中与候选相似的已有结论，返回「id + 摘要」文本列表喂给 LLM 比对。
+def find_related_entries(index, candidate: dict, limit: int = 8) -> list[dict]:
+    """检索库中与候选相似的已有结论，返回结构化条目（id + type + abstract + valid_from）。
 
     读路径零网络约束：只走本地 SQLite 索引（Index.recall），不调模型、不联网。
-    查询词取候选的 abstract + conclusion + name，命中后转成可读文本。
     检索失败（如索引未建）时返回空列表，不阻断软判断流程。
+    与 :func:`find_related` 的区别：这里保留 valid_from 等结构化字段，
+    供代码层做时间裁决（如 SUPERSEDE 的时间维度守卫）。
     """
     abstract = (candidate.get("abstract") or "").strip()
     conclusion = (candidate.get("conclusion") or "").strip()
@@ -230,15 +231,62 @@ def find_related(index, candidate: dict, limit: int = 8) -> list[str]:
         hits = index.recall(query, limit=limit)
     except Exception:
         return []
+    return [dict(hit) for hit in hits]
+
+
+def find_related(index, candidate: dict, limit: int = 8) -> list[str]:
+    """检索库中与候选相似的已有结论，返回「id + 摘要」文本列表喂给 LLM 比对。
+
+    读路径零网络约束：只走本地 SQLite 索引（Index.recall），不调模型、不联网。
+    查询词取候选的 abstract + conclusion + name，命中后转成可读文本。
+    检索失败（如索引未建）时返回空列表，不阻断软判断流程。
+
+    文本里额外带上生效日期（valid_from），让 LLM 判 UPDATE/SUPERSEDE 时
+    能看到新旧时间关系，减少「旧的大杂烩推翻新的精确结论」这类误判。
+    """
+    hits = find_related_entries(index, candidate, limit=limit)
     lines = []
     for hit in hits:
         ident = hit.get("id", "")
         abstract_text = hit.get("abstract", "") or ""
         type_text = hit.get("type", "") or ""
+        valid_from = (hit.get("valid_from") or "").strip()
         parts = [ident]
         if type_text:
             parts.append("[%s]" % type_text)
         if abstract_text:
             parts.append(abstract_text)
+        if valid_from:
+            parts.append("(生效:%s)" % valid_from)
         lines.append(" ".join(parts))
     return lines
+
+
+def supersede_time_guard(candidate: dict, related_entries: list[dict]) -> tuple[bool, str]:
+    """SUPERSEDE 的时间维度守卫：新候选比被取代旧结论更旧时，禁止取代。
+
+    背景：批量导入旧记忆时，蒸馏出的「旧的大杂烩」可能被 LLM 判为要
+    取代库中「今天刚确认的精确结论」，方向反了。规则：
+    - 候选带 original_date（导入条目），且被取代条目带 valid_from；
+    - 若候选 original_date 严格早于所有被取代条目的 valid_from，
+      说明候选是更旧的结论，不该作废更新的精确结论 → 禁止取代。
+    返回 (是否允许取代, 说明)。允许时返回 (True, "")。
+    """
+    cand_date = (candidate.get("original_date") or "").strip()
+    if not cand_date:
+        # 候选无原始日期（人类手写 / 未标日期），无法判新旧，不拦。
+        return True, ""
+    older_than_all = True
+    compared_any = False
+    for hit in related_entries:
+        valid_from = (hit.get("valid_from") or "").strip()
+        if not valid_from:
+            continue
+        compared_any = True
+        if cand_date >= valid_from:
+            # 候选不早于某条被取代条目，说明候选更「新」或同天，允许取代。
+            older_than_all = False
+            break
+    if compared_any and older_than_all:
+        return False, "候选原始日期 %s 早于被取代结论，方向相反，禁止作废更新结论" % cand_date
+    return True, ""

@@ -194,6 +194,74 @@ class TestConflictDetection(unittest.TestCase):
             "ADD")
 
 
+class TestSupersedeTimeGuard(unittest.TestCase):
+    """SUPERSEDE 的时间维度守卫：候选比被取代结论更旧时禁止取代。"""
+
+    def test_older_candidate_blocked(self):
+        cand = {"name": "old-mixed", "original_date": "2026-05-01"}
+        related = [{"id": "city-flexible", "valid_from": "2026-11-09"}]
+        allow, note = judgment.supersede_time_guard(cand, related)
+        self.assertFalse(allow)
+        self.assertIn("方向相反", note)
+
+    def test_newer_candidate_allowed(self):
+        cand = {"name": "new", "original_date": "2026-11-10"}
+        related = [{"id": "city-flexible", "valid_from": "2026-11-09"}]
+        allow, _ = judgment.supersede_time_guard(cand, related)
+        self.assertTrue(allow)
+
+    def test_same_day_allowed(self):
+        cand = {"name": "same", "original_date": "2026-11-09"}
+        related = [{"id": "city-flexible", "valid_from": "2026-11-09"}]
+        allow, _ = judgment.supersede_time_guard(cand, related)
+        self.assertTrue(allow)
+
+    def test_candidate_without_date_not_blocked(self):
+        cand = {"name": "nodate"}
+        related = [{"id": "city-flexible", "valid_from": "2026-11-09"}]
+        allow, _ = judgment.supersede_time_guard(cand, related)
+        self.assertTrue(allow)
+
+    def test_related_without_date_not_blocked(self):
+        cand = {"name": "old", "original_date": "2026-05-01"}
+        related = [{"id": "x", "valid_from": ""}]
+        allow, _ = judgment.supersede_time_guard(cand, related)
+        self.assertTrue(allow)
+
+    def test_empty_related_not_blocked(self):
+        cand = {"name": "old", "original_date": "2026-05-01"}
+        allow, _ = judgment.supersede_time_guard(cand, [])
+        self.assertTrue(allow)
+
+
+class TestFindRelatedEntries(unittest.TestCase):
+    """find_related_entries 返回结构化条目，保留 valid_from 供时间裁决。"""
+
+    def test_returns_structured_hits(self):
+        class FakeIndex:
+            def recall(self, query, limit):
+                return [
+                    {"id": "p1", "type": "preference", "abstract": "在北京",
+                     "valid_from": "2026-08-22", "invalid_at": ""},
+                ]
+        result = judgment.find_related_entries(
+            FakeIndex(), {"abstract": "城市", "name": "city"})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["id"], "p1")
+        self.assertEqual(result[0]["valid_from"], "2026-08-22")
+
+    def test_index_failure_degrades_to_empty(self):
+        class BoomIndex:
+            def recall(self, query, limit):
+                raise RuntimeError("boom")
+        result = judgment.find_related_entries(
+            BoomIndex(), {"abstract": "城市", "name": "city"})
+        self.assertEqual(result, [])
+
+    def test_empty_query_returns_empty(self):
+        self.assertEqual(judgment.find_related_entries(None, {}), [])
+
+
 class TestResolveKey(unittest.TestCase):
     def test_env_priority(self):
         import os

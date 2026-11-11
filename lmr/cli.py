@@ -299,6 +299,7 @@ def cmd_consolidate(args):
 
     for cand in candidates:
         existing = judgment.find_related(idx, cand) if idx is not None else []
+        related_entries = judgment.find_related_entries(idx, cand) if idx is not None else []
         try:
             client = llm_module.make_client(settings, data_config)
             report = judgment.judge(client, cand, existing)
@@ -308,6 +309,18 @@ def cmd_consolidate(args):
 
         action = judgment.decide_action(report)
         name = cand.get("name", "")
+
+        # 时间维度守卫：SUPERSEDE 若方向反了（新候选比被取代结论更旧），
+        # 禁止作废更精确的新结论，降级为 NOOP 丢弃（更旧的重复/过时结论不入库）。
+        if action == "SUPERSEDE":
+            allow, guard_note = judgment.supersede_time_guard(cand, related_entries)
+            if not allow:
+                noop_dropped.append({
+                    "name": name,
+                    "abstract": cand.get("abstract", ""),
+                    "guard_note": guard_note,
+                })
+                action = "NOOP"  # 降级，走下面的 NOOP 分支
 
         if action == "NOOP":
             noop_dropped.append({"name": name, "abstract": cand.get("abstract", "")})
