@@ -1,0 +1,3 @@
+schema: spec-driven
+created: 2026-11-12
+goal: 让语义检索常驻化：模型只加载一次、检索毫秒级、hook 永不超时、故障自动降级不影响会话
