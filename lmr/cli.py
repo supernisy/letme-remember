@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -86,6 +87,11 @@ def _build_parser():
     inject.add_argument("--limit", type=int, help="召回条数上限（配合 --query）")
 
     embed_cmd = sub.add_parser("embed", parents=[common], help="全量向量化（补建语义索引）")
+
+    sub.add_parser("serve", parents=[common],
+                   help="常驻召回服务：模型只加载一次，检索毫秒级（挂 SessionStart）")
+    sub.add_parser("serve-shutdown", parents=[common],
+                   help="通知常驻召回服务退出（挂 SessionEnd）")
 
     distill_cmd = sub.add_parser("distill", parents=[common], help="批量写入候选（原子预校验）")
     distill_cmd.add_argument("--candidates", required=True, help="候选数组的 JSON 文件")
@@ -512,6 +518,22 @@ def cmd_restore(args):
     return backup_module.restore(paths, settings, args.backup_file)
 
 
+def cmd_serve(args):
+    """常驻召回服务：离线加载模型后阻塞监听，空闲超时自退。"""
+    from . import serve
+    # 服务进程必须离线加载模型（禁联网），否则联网验证会把启动拖到 100 秒。
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    return serve.serve_forever()
+
+
+def cmd_serve_shutdown(args):
+    """通知常驻召回服务退出；服务未运行则静默成功。"""
+    from . import serve
+    serve.client_shutdown()
+    return {"shutdown": "requested"}
+
+
 HANDLERS = {
     "init": cmd_init,
     "record": cmd_record,
@@ -537,6 +559,8 @@ HANDLERS = {
     "setup": cmd_setup,
     "backup": cmd_backup,
     "restore": cmd_restore,
+    "serve": cmd_serve,
+    "serve-shutdown": cmd_serve_shutdown,
 }
 
 
