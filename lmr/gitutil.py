@@ -78,3 +78,24 @@ def undo_batch(root, batch):
 
 def now_iso():
     return datetime.now().astimezone().replace(microsecond=0).isoformat()
+
+
+def is_clean(root):
+    """工作树是否干净（无未提交改动）。"""
+    result = _run(["git", "status", "--porcelain"], root)
+    return result.stdout.strip() == ""
+
+
+def push(root, remote, branch):
+    """推送本地提交到远端；失败抛 InternalError。"""
+    _run(["git", "push", remote, branch], root)
+
+
+def pull(root, remote, branch):
+    """从远端拉取；失败抛 InternalError。"""
+    _run(["git", "pull", remote, branch], root)
+
+
+def clone(parent, remote, name):
+    """把远端仓库 clone 到 parent/name；失败抛 InternalError。"""
+    _run(["git", "clone", "-q", remote, name], parent)

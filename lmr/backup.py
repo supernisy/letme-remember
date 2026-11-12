@@ -125,14 +125,103 @@ def backup(paths, settings, target_dir=None):
     return {"file": str(out_file), "bytes": len(cipher), "encrypted": True}
 
 
-def restore(paths, settings, backup_file):
-    """用本地密钥解密备份并恢复数据目录。密钥缺失时明确报错。"""
+_BACKUP_GITIGNORE = "*\n!*.enc\n!.gitignore\n"
+
+
+def _backup_dir(paths, target_dir=None):
+    return Path(target_dir) if target_dir else (paths.root / "backup")
+
+
+def _ensure_backup_repo(target):
+    """确保备份目录是独立 git，且只 track 密文与 .gitignore。"""
+    target.mkdir(parents=True, exist_ok=True)
+    ignore = target / ".gitignore"
+    if not ignore.is_file():
+        ignore.write_text(_BACKUP_GITIGNORE, encoding="utf-8")
+    gitutil.ensure_repo(target)
+
+
+def _remote(paths, settings=None):
+    """从配置读云端远端 URL；未配置返回 None。
+
+    优先读数据目录内 config.json 的 backup.remote，其次读合并后的
+    settings（backup 键）。两者都没有则返回 None（未配置）。
+    """
+    import json
+
+    if paths.config.is_file():
+        try:
+            data = json.loads(paths.config.read_text(encoding="utf-8"))
+            remote = (data or {}).get("backup", {}).get("remote")
+            if remote:
+                return remote
+        except (OSError, ValueError):
+            pass
+    backup_cfg = (settings or {}).get("backup") or {}
+    return backup_cfg.get("remote")
+
+
+def sync(paths, settings, target_dir=None):
+    """加密数据目录并把密文推送到配置的云端远端。
+
+    未配置云端目标时优雅降级为「仅本地加密」，返回 synced=False；
+    配置了则提交并 push，云端只含密文。密钥永不上云。
+    """
+    result = backup(paths, settings, target_dir=target_dir)
+    target = Path(result["file"]).parent
+    _ensure_backup_repo(target)
+    gitutil.commit(target, "backup %s" % result["file"])
+    remote = _remote(paths, settings)
+    if not remote:
+        return dict(result, synced=False, reason="未配置云端目标（backup.remote）")
+    gitutil.push(target, remote, "master")
+    return dict(result, synced=True, remote=remote)
+
+
+def _latest_enc(target):
+    """返回备份目录里最新的密文文件；无密文返回 None。"""
+    encs = sorted(target.glob("*.enc"), key=lambda p: p.stat().st_mtime)
+    return encs[-1] if encs else None
+
+
+def _pull_from_remote(target, remote):
+    """把云端密文拉到本地备份目录。
+
+    目录已是远端 clone 出的 git → 直接 pull；否则（换机后空目录）clone。
+    """
+    if (target / ".git").is_dir():
+        gitutil.pull(target, remote, "master")
+    else:
+        parent = target.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        gitutil.clone(parent, remote, target.name)
+
+
+def restore(paths, settings, backup_file=None, from_cloud=False):
+    """用本地密钥解密备份并恢复数据目录。
+
+    - from_cloud=False：用本地密文文件（backup_file 必填）。
+    - from_cloud=True：从云端远端拉取密文后取最新一份解密恢复。
+    密钥缺失或远端未配置时明确报错。
+    """
     key = _load_key()
     if key is None:
         raise ValidationError("本地无备份密钥（%s），无法恢复" % KEY_FILE)
-    path = Path(backup_file)
-    if not path.is_file():
-        raise ValidationError("备份文件不存在: %s" % backup_file)
+    if from_cloud:
+        remote = _remote(paths, settings)
+        if not remote:
+            raise ValidationError("未配置云端目标（backup.remote），无法从云端恢复")
+        target = _backup_dir(paths)
+        _pull_from_remote(target, remote)
+        path = _latest_enc(target)
+        if path is None:
+            raise ValidationError("云端备份目录无密文，无法恢复")
+    else:
+        if not backup_file:
+            raise ValidationError("缺少备份文件路径（或指定 --from-cloud）")
+        path = Path(backup_file)
+        if not path.is_file():
+            raise ValidationError("备份文件不存在: %s" % backup_file)
     cipher = base64.b64decode(path.read_bytes())
     plain = _decrypt_bytes(cipher, key)
     _unpack_store(paths, plain)

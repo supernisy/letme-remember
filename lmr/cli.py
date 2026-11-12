@@ -159,8 +159,12 @@ def _build_parser():
     backup_cmd = sub.add_parser("backup", parents=[common], help="加密数据目录并产出密文备份")
     backup_cmd.add_argument("--target", help="备份产物目录（默认数据目录下 backup/）")
 
+    backup_sync_cmd = sub.add_parser("backup-sync", parents=[common], help="加密数据目录并同步密文到云端")
+    backup_sync_cmd.add_argument("--target", help="备份产物目录（默认数据目录下 backup/）")
+
     restore_cmd = sub.add_parser("restore", parents=[common], help="用本地密钥解密备份并恢复")
-    restore_cmd.add_argument("backup_file", help="备份密文文件路径")
+    restore_cmd.add_argument("backup_file", nargs="?", default="", help="备份密文文件路径（--from-cloud 时可省略）")
+    restore_cmd.add_argument("--from-cloud", action="store_true", help="从云端远端拉取密文后恢复")
 
     return root
 
@@ -542,10 +546,20 @@ def cmd_backup(args):
     return backup_module.backup(paths, settings, target_dir=args.target)
 
 
+def cmd_backup_sync(args):
+    """加密数据目录并把密文同步到云端。未配置远端时优雅降级。"""
+    paths, settings = _paths(args)
+    return backup_module.sync(paths, settings, target_dir=args.target)
+
+
 def cmd_restore(args):
     """用本地密钥解密备份并恢复数据目录。密钥缺失时明确报错。"""
     paths, settings = _paths(args)
-    return backup_module.restore(paths, settings, args.backup_file)
+    return backup_module.restore(
+        paths, settings,
+        backup_file=args.backup_file or None,
+        from_cloud=args.from_cloud,
+    )
 
 
 def cmd_serve(args):
@@ -589,6 +603,7 @@ HANDLERS = {
     "queue": cmd_queue,
     "setup": cmd_setup,
     "backup": cmd_backup,
+    "backup-sync": cmd_backup_sync,
     "restore": cmd_restore,
     "serve": cmd_serve,
     "serve-shutdown": cmd_serve_shutdown,
