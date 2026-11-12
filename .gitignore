@@ -6,13 +6,13 @@
 
 # 记忆数据：真实记忆只存代码仓库外的私有数据目录。
 # 下面这些是防御性兜底，防止误把数据目录放进本仓库时被提交。
-store/
-archive/
-MEMORY.md
-audit.log
-config.json
-proposals/
-staging/
+# 用 / 前缀锚定到仓库根，避免误伤 openspec/changes/archive/ 等合法子目录。
+/store/
+/MEMORY.md
+/audit.log
+/config.json
+/proposals/
+/staging/
 
 # 本地环境
 .venv/
@@ -22,6 +22,7 @@ __pycache__/
 # 系统文件
 .DS_Store
 Thumbs.db
+.openspec-archive.lock
 
 # 本地临时调试产物（截图 / 探针 / 凭据文件，禁止入库）
 /_*.png
