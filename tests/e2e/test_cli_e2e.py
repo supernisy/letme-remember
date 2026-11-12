@@ -103,6 +103,40 @@ class TestCliE2E(unittest.TestCase):
         self.assertIn("结论内容", shown.stdout)
         self.assertIn("理由内容", shown.stdout)
 
+    def test_import_preprocess_cli(self):
+        # 只读预处理：help 退出码 0，空源返回空，产卡只进 staging
+        help_result = self.run_mem("import-preprocess", "--help")
+        self.assertEqual(help_result.returncode, 0)
+        self.assertIn("usage", help_result.stdout.lower())
+
+        # 空源：空目录返回空结果，退出码 0
+        empty = Path(self.tmp.name) / "empty"
+        empty.mkdir(parents=True, exist_ok=True)
+        empty_result = self.run_mem("import-preprocess", "--source", str(empty))
+        self.assertEqual(empty_result.returncode, 0, empty_result.stderr)
+        payload = json.loads(empty_result.stdout)
+        self.assertEqual(payload["total_entries"], 0)
+        self.assertEqual(payload["cards_written"], 0)
+
+        # 合法源：产卡写 staging，报告不含正文
+        src = Path(self.tmp.name) / "src.md"
+        src.write_text(
+            "---\nname: preference-笔记\nabstract: 偏好纯文本\ntype: preference\n"
+            "created: 2026-01-01T00:00:00+00:00\nupdated: 2026-01-01T00:00:00+00:00\n"
+            "valid_from: 2026-01-01\ninvalid_at:\nsuperseded_by:\nweight: 1.0\n"
+            "author: human\nlinks:\nprovenance:\n---\n\n## 结论\n\n偏好用纯文本。\n\n"
+            "## 理由\n\n便于检索。\n",
+            encoding="utf-8",
+        )
+        result = self.run_mem("import-preprocess", "--source", str(src),
+                              "--source-category", "preference", "--batch", "b1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["cards_written"], 1)
+        self.assertEqual(payload["verdict_counts"]["ok"], 1)
+        # 报告不含正文
+        self.assertNotIn("偏好用纯文本", result.stdout)
+
     def test_acceptance_record_exists(self):
         # @req 6.1
         record = ROOT / "docs" / "v1-acceptance.md"

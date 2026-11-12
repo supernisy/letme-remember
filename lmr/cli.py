@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import config, distill, index, proposal, queue, store
+from . import config, distill, importprep, index, proposal, queue, store
 from . import llm as llm_module
 from . import judgment
 from . import host as host_module
@@ -115,6 +115,15 @@ def _build_parser():
     batch_cmd = sub.add_parser("batch-distill", parents=[common], help="用 LLM 批量蒸馏旧记忆文本")
     batch_cmd.add_argument("--file", required=True, help="待蒸馏的文本文件")
     batch_cmd.add_argument("--dry-run", dest="dry_run", action="store_true", help="只产出候选 JSON，不落库")
+
+    prep_cmd = sub.add_parser(
+        "import-preprocess", parents=[common],
+        help="只读预处理：把异构源逐条判定为三类，产出候选卡片（暂存区）+ 脱敏报告")
+    prep_cmd.add_argument("--source", dest="source", required=True,
+                          help="源文件或目录路径（目录则扫描其中 *.md / *.txt）")
+    prep_cmd.add_argument("--source-category", dest="source_category", default="",
+                          help="来源类别（如 log/session/rule-file/job 等）")
+    prep_cmd.add_argument("--batch", default="", help="导入批次标识（可选）")
 
     propose = sub.add_parser("propose", parents=[common], help="生成内容变更类审批提案")
     propose.add_argument("op", nargs="?", help="merge/split/supersede/delete/purge/update_abstract")
@@ -429,6 +438,27 @@ def cmd_batch_distill(args):
     return distill.run_candidates(candidates, paths, settings)
 
 
+def cmd_import_preprocess(args):
+    """只读预处理：扫描源文件，产出候选卡片（staging）+ 脱敏报告。
+
+    本命令不落库：卡片只进暂存区，人确认后才走三审。空源/空暂存
+    正常返回空结果（count 为 0），退出码 0。
+    """
+    paths, _ = _paths(args)
+    source = Path(args.source)
+    if source.is_dir():
+        sources = sorted(
+            list(source.glob("*.md")) + list(source.glob("*.txt"))
+        )
+    elif source.is_file():
+        sources = [source]
+    else:
+        raise ValidationError("源路径不存在: %s" % args.source)
+    return importprep.run(paths, sources,
+                          source_category=args.source_category,
+                          batch=args.batch)
+
+
 def cmd_propose(args):
     paths, _ = _paths(args)
     if args.batch_file:
@@ -548,6 +578,7 @@ HANDLERS = {
     "judge": cmd_judge,
     "consolidate": cmd_consolidate,
     "batch-distill": cmd_batch_distill,
+    "import-preprocess": cmd_import_preprocess,
     "propose": cmd_propose,
     "apply": cmd_apply,
     "proposals": cmd_proposals,
