@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import config, distill, index, proposal, store
+from . import config, distill, index, proposal, queue, store
 from . import llm as llm_module
 from . import judgment
 from .errors import EXIT_INTERNAL, EXIT_OK, EXIT_VALIDATION, MemError, NotFoundError, ValidationError
@@ -125,6 +125,12 @@ def _build_parser():
     purge = sub.add_parser("purge", parents=[common], help="真正删除一条错误/无效记忆（需审批，不可逆）")
     purge.add_argument("entry_id")
     purge.add_argument("--reason", default="", help="删除原因（写入审计）")
+
+    queue_cmd = sub.add_parser("queue", parents=[common], help="查看/处理待审队列（L1/L2 蒸馏候选）")
+    queue_cmd.add_argument("action", nargs="?", default="list",
+                           help="list（查看待审）/ approve <id>（批准入库）/ reject <id>（驳回）/ expire（超时降级）")
+    queue_cmd.add_argument("entry_id", nargs="?", default="", help="approve/reject 时的候选 id")
+    queue_cmd.add_argument("--days", type=int, default=None, help="expire 的超时天数（默认 7）")
 
     return root
 
@@ -435,6 +441,30 @@ def cmd_purge(args):
     return store.purge(paths, settings, args.entry_id, reason=args.reason)
 
 
+def cmd_queue(args):
+    """待审队列：list / approve / reject / expire 四个子操作。
+
+    候选分级后 L0 静默入库（不经这里），L1/L2 进队列待人批。
+    approve 走 store.record 完整写入链，不绕过脚本红线与分级裁决。
+    """
+    paths, settings = _paths(args)
+    action = args.action
+    if action == "list":
+        return {"count": len(queue.list_pending(paths)), "items": queue.list_pending(paths)}
+    if action == "approve":
+        if not args.entry_id:
+            raise ValidationError("approve 需要候选 id")
+        return queue.approve(paths, settings, args.entry_id)
+    if action == "reject":
+        if not args.entry_id:
+            raise ValidationError("reject 需要候选 id")
+        return queue.reject(paths, args.entry_id)
+    if action == "expire":
+        days = args.days or queue.DEFAULT_TIMEOUT_DAYS
+        return queue.expire(paths, timeout_days=days)
+    raise ValidationError("未知的 queue 子操作: %s" % action)
+
+
 HANDLERS = {
     "init": cmd_init,
     "record": cmd_record,
@@ -455,6 +485,7 @@ HANDLERS = {
     "undo-batch": cmd_undo_batch,
     "archive": cmd_archive,
     "purge": cmd_purge,
+    "queue": cmd_queue,
 }
 
 
