@@ -114,20 +114,23 @@ if transcript:
 ''' % (mem_py, data_dir)
 
     def _recall_script(self, paths) -> str:
-        """UserPromptSubmit hook：召回相关记忆注入上下文。
+        """UserPromptSubmit hook：召回相关记忆注入上下文（两段式第一段）。
 
-        薄壳：调用 mem.py inject 输出记忆目录（一句话摘要），零模型零网络。
+        薄壳：从 stdin 读 prompt，调用 mem.py inject --query 做相关召回，
+        只注入与当前问题相关的摘要（Top-K + 字节预算），而非全量目录。
         stdout 作为 additionalContext 注入宿主本轮上下文。
-        自保护：mem.py 找不到 / 调用失败 → 静默放行（exit 0），不挡主流程。
+        自保护：mem.py 找不到 / 读 stdin 失败 / 调用异常 → 静默放行。
         """
         mem_py = _posix(REPO_ROOT / "mem.py")
         data_dir = str(paths.root)
-        return '''"""WorkBuddy UserPromptSubmit hook：召回相关记忆注入上下文。
+        return '''"""WorkBuddy UserPromptSubmit hook：召回相关记忆注入上下文（两段式）。
 
-薄壳：调用 mem.py inject 输出记忆目录（一句话摘要），零模型零网络。
+薄壳：从 stdin 读 prompt，调用 mem.py inject --query 做关键词+语义召回，
+只注入与当前问题相关的摘要（Top-K + 字节预算），而非全量目录。
 stdout 作为 additionalContext 注入宿主本轮上下文。
-自保护：mem.py 找不到 / 调用失败 → 静默放行（exit 0），不挡主流程。
+自保护：mem.py 找不到 / 读 stdin 失败 / 调用异常 → 静默放行（exit 0）。
 """
+import json
 import os
 import subprocess
 import sys
@@ -138,11 +141,21 @@ DATA_DIR = %r
 if not os.path.isfile(MEM_PY):
     sys.exit(0)  # mem.py 不存在 → 放行，绝不让主流程卡死
 
+query = ""
 try:
-    result = subprocess.run(
-        [sys.executable, MEM_PY, "inject", "--data-dir", DATA_DIR],
-        capture_output=True, text=True, encoding="utf-8",
-    )
+    payload = json.loads(sys.stdin.read())
+    query = payload.get("prompt") or ""
+except Exception:
+    query = ""
+
+if not query:
+    sys.exit(0)  # 拿不到问题就放行，不无脑全量注入
+
+try:
+    cmd = [sys.executable, MEM_PY, "inject", "--data-dir", DATA_DIR,
+           "--query", query, "--limit", "10"]
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                            timeout=30)
     print(result.stdout, end="")
 except Exception:
     sys.exit(0)  # 任何异常 → 放行

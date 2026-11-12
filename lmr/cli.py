@@ -62,7 +62,7 @@ def _build_parser():
     record.add_argument("--original-date", dest="original_date", help="导入条目的原始生效日期")
     record.add_argument("--batch", help="导入批次标识")
 
-    recall = sub.add_parser("recall", parents=[common], help="关键词检索（零模型、零网络）")
+    recall = sub.add_parser("recall", parents=[common], help="关键词+语义检索（本地向量，可选依赖）")
     recall.add_argument("query", help="查询词，支持中文两字及以上")
     recall.add_argument("--as-of", dest="as_of", help="查询该日期成立的真相")
     recall.add_argument("--type", dest="type_filter", help="按类型筛选")
@@ -82,6 +82,10 @@ def _build_parser():
 
     inject = sub.add_parser("inject", parents=[common], help="输出注入用目录（按字节预算截断）")
     inject.add_argument("--budget", type=int, help="字节预算上限")
+    inject.add_argument("--query", help="按查询词召回相关条目（两段式第一段），省略则全量")
+    inject.add_argument("--limit", type=int, help="召回条数上限（配合 --query）")
+
+    embed_cmd = sub.add_parser("embed", parents=[common], help="全量向量化（补建语义索引）")
 
     distill_cmd = sub.add_parser("distill", parents=[common], help="批量写入候选（原子预校验）")
     distill_cmd.add_argument("--candidates", required=True, help="候选数组的 JSON 文件")
@@ -221,6 +225,13 @@ def cmd_list(args):
 def cmd_inject(args):
     paths, settings = _paths(args)
     budget = args.budget or int(settings["injection_budget_bytes"])
+    # 有 query 时按相关度召回（两段式第一段），并写回 memory_md 供注入
+    if getattr(args, "query", None):
+        info = index.Index(paths, settings).build_memory_md(
+            budget=budget, query=args.query, limit=getattr(args, "limit", None))
+        if not paths.memory_md.is_file():
+            return ""
+        return paths.memory_md.read_text(encoding="utf-8")
     if not paths.memory_md.is_file():
         return ""
     data = paths.memory_md.read_bytes()
@@ -236,6 +247,12 @@ def cmd_inject(args):
         lines.append(line)
         used += size
     return "".join(lines)
+
+
+def cmd_embed(args):
+    """全量向量化：把记忆库里所有条目补上语义向量。"""
+    paths, settings = _paths(args)
+    return index.Index(paths, settings).embed_all()
 
 
 def cmd_distill(args):
@@ -504,6 +521,7 @@ HANDLERS = {
     "rebuild": cmd_rebuild,
     "list": cmd_list,
     "inject": cmd_inject,
+    "embed": cmd_embed,
     "distill": cmd_distill,
     "judge": cmd_judge,
     "consolidate": cmd_consolidate,

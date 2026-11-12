@@ -13,6 +13,8 @@ from pathlib import Path
 ENV_DATA_DIR = "LMR_DATA_DIR"
 ENV_DISABLE_TOKENIZER = "LMR_DISABLE_TOKENIZER"
 ENV_NO_NETWORK_PROBE = "LMR_NO_NETWORK_PROBE"
+ENV_DISABLE_EMBEDDING = "LMR_DISABLE_EMBEDDING"
+ENV_EMBED_MODEL = "LMR_EMBED_MODEL"
 
 DEFAULT_DATA_DIR = Path.home() / ".letme-remember" / "data"
 USER_CONFIG_DIR = Path.home() / ".letme-remember"
@@ -33,6 +35,10 @@ DEFAULT_SETTINGS = {
     "llm_base_url": "",
     "llm_model": "",
     "llm_key": "",
+    # v1.3 本地语义检索（可选依赖，未装 sentence-transformers 时自动降级）
+    "embedding_enabled": True,
+    "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
+    "semantic_weight": 0.5,
 }
 
 

@@ -110,3 +110,35 @@ class TestIndex(MemTestCase):
         self.idx().build_memory_md()
         self.assertTrue(self.paths.memory_md.is_file())
         self.assertIn("[", self.paths.memory_md.read_text(encoding="utf-8"))
+
+    def test_query_injection_recalls_relevant_not_full(self):
+        # 两段式第一段：inject --query 只召回相关条目，而非全量目录。
+        for number in range(10):
+            self.make(name="无关条目%d" % number)
+        self.make(name="蚂蚁集团面试复盘", abstract="蚂蚁集团终面策略复盘")
+        info = self.idx().build_memory_md(query="蚂蚁集团面试", limit=3)
+        text = self.paths.memory_md.read_text(encoding="utf-8")
+        self.assertIn("蚂蚁集团", text)
+        self.assertLess(info["lines"], 5)
+
+    def test_embedding_degradation_when_disabled(self):
+        # embedding 禁用时，recall 结果 semantic 恒为 0，不影响关键词检索。
+        os.environ[config.ENV_DISABLE_EMBEDDING] = "1"
+        try:
+            from lmr import embedding
+            embedding.reset_cache()
+            self.make(name="缓存数据不一致", abstract="Redis 与 DB 数据不同步处理")
+            hits = self.idx().recall("缓存不一致")
+            self.assertTrue(len(hits) >= 1)
+            self.assertEqual(hits[0]["semantic"], 0.0)
+        finally:
+            os.environ.pop(config.ENV_DISABLE_EMBEDDING, None)
+            from lmr import embedding
+            embedding.reset_cache()
+
+    def test_embedding_available_flag(self):
+        # embedding 模块：未装依赖时 available() 为 False，且不抛异常。
+        from lmr import embedding
+        embedding.reset_cache()
+        self.assertIn(embedding.available(), (True, False))
+

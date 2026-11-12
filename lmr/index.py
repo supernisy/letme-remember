@@ -13,6 +13,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import frontmatter, schema, tokenizer
+from . import embedding as _emb
 from .errors import InternalError
 
 SCHEMA_SQL = """
@@ -31,6 +32,11 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(
   id UNINDEXED, seg, abstract, body, tokenize='unicode61'
+);
+CREATE TABLE IF NOT EXISTS vec (
+  rowid INTEGER PRIMARY KEY,
+  dim INTEGER NOT NULL,
+  vec BLOB NOT NULL
 );
 """
 
@@ -73,6 +79,73 @@ class Index:
             "INSERT INTO fts(rowid, id, seg, abstract, body) VALUES (?, ?, ?, ?, ?)",
             (rowid, entry_id, seg, abstract, body),
         )
+
+    def _vec_replace(self, conn, rowid, entry_id, abstract, body):
+        """按需向量化一条记忆（语义能力不可用时跳过，删旧向量保持干净）。"""
+        if not self._embedding_on():
+            conn.execute("DELETE FROM vec WHERE rowid=?", (rowid,))
+            return
+        text = " ".join([entry_id, abstract or "", (body or "")[:2000]])
+        vecs = _emb.embed(text)
+        if vecs is None or len(vecs) == 0:
+            conn.execute("DELETE FROM vec WHERE rowid=?", (rowid,))
+            return
+        blob = _emb.vector_blob(vecs[0])
+        conn.execute("DELETE FROM vec WHERE rowid=?", (rowid,))
+        conn.execute(
+            "INSERT INTO vec(rowid, dim, vec) VALUES (?, ?, ?)",
+            (rowid, len(vecs[0]), blob),
+        )
+
+    def _embedding_on(self):
+        """语义检索是否启用（配置开关 + 依赖可用）。"""
+        if not self.settings.get("embedding_enabled", True):
+            return False
+        return _emb.available()
+
+    def _semantic_scores(self, query, rowids):
+        """对给定 rowids 计算与 query 的余弦相似度（已归一化向量 → 点积）。"""
+        conn = self._connect()
+        try:
+            qv = _emb.embed(query)
+            if qv is None:
+                return {}
+            qv = qv[0]
+            import numpy as np
+            scores = {}
+            placeholders = ",".join("?" * len(rowids)) if rowids else ""
+            if not rowids:
+                return {}
+            for row in conn.execute(
+                "SELECT rowid, vec FROM vec WHERE rowid IN (%s)" % placeholders,
+                tuple(rowids),
+            ):
+                blob = row["vec"]
+                dim = len(blob) // 4
+                v = _emb.vector_from_blob(blob, dim)
+                if len(v) != len(qv):
+                    continue
+                scores[row["rowid"]] = float(np.dot(qv, v))
+            return scores
+        finally:
+            conn.close()
+
+    def embed_all(self):
+        """全量向量化：把 memories 里所有未向量化的行补上向量。"""
+        if not self._embedding_on():
+            return {"embedded": 0, "note": "embedding 不可用（依赖未装或已禁用）"}
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT m.rowid, m.id, m.abstract, m.body FROM memories m "
+                "LEFT JOIN vec v ON v.rowid = m.rowid WHERE v.rowid IS NULL"
+            ).fetchall()
+            for row in rows:
+                self._vec_replace(conn, row["rowid"], row["id"], row["abstract"], row["body"])
+            conn.commit()
+            return {"embedded": len(rows), "model": _emb.model_name()}
+        finally:
+            conn.close()
 
     def sync(self, force=False):
         """按内容哈希增量同步；分词器版本变化时自动全量重建。"""
@@ -124,10 +197,12 @@ class Index:
                     rowid = cursor.lastrowid
                     stats["added"] += 1
                 self._fts_replace(conn, rowid, entry_id, seg, meta["abstract"], body)
+                self._vec_replace(conn, rowid, entry_id, meta["abstract"], body)
             stale = [row for row in conn.execute("SELECT rowid, id FROM memories").fetchall()
                      if row["id"] not in seen]
             for row in stale:
                 conn.execute("DELETE FROM fts WHERE rowid=?", (row["rowid"],))
+                conn.execute("DELETE FROM vec WHERE rowid=?", (row["rowid"],))
                 conn.execute("DELETE FROM memories WHERE rowid=?", (row["rowid"],))
                 stats["removed"] += 1
             self._set_meta(conn, "tokenizer_version", version)
@@ -150,7 +225,11 @@ class Index:
         return max(floor, base ** (age / half_life)) if half_life > 0 else 1.0
 
     def recall(self, query, as_of=None, type_filter=None, limit=None):
-        """返回按 相关度 × 权重 × 新鲜度 排序的摘要列表。"""
+        """返回按 相关度 × 权重 × 新鲜度 排序的摘要列表。
+
+        相关度 = 关键词(BM25 + 子串) 与 语义(余弦) 的融合（RRF）。
+        语义不可用时自动退化为纯关键词，不影响结果可用性。
+        """
         self.sync()
         as_of_date = _as_date(as_of) if as_of else date.today()
         if as_of_date is None:
@@ -176,6 +255,11 @@ class Index:
                 ):
                     relevance.setdefault(row["rowid"], 0.5)
 
+            # 语义分数融合（RRF）：关键词命中得基础分，语义命中叠加。
+            semantic = {}
+            if self._embedding_on() and relevance:
+                semantic = self._semantic_scores(query, list(relevance.keys()))
+
             results = []
             for rowid, rel in relevance.items():
                 row = conn.execute("SELECT * FROM memories WHERE rowid=?", (rowid,)).fetchone()
@@ -193,10 +277,15 @@ class Index:
                 else:
                     if row["invalid_at"] or row["archived"]:
                         continue
-                score = rel * float(row["weight"]) * self._recency(row["valid_from"], as_of_date)
+                # 语义融合：把余弦相似度映射到 [0,1] 后与关键词分加权。
+                sem = semantic.get(rowid, 0.0)
+                sw = float(self.settings.get("semantic_weight", 0.5))
+                fused = (1.0 - sw) * rel + sw * (0.5 + 0.5 * sem)
+                score = fused * float(row["weight"]) * self._recency(row["valid_from"], as_of_date)
                 results.append({
                     "id": row["id"], "abstract": row["abstract"], "type": row["type"],
                     "score": round(score, 6), "path": row["path"],
+                    "semantic": round(float(sem), 6),
                     "valid_from": row["valid_from"], "invalid_at": row["invalid_at"],
                 })
             results.sort(key=lambda item: (-item["score"], item["id"]))
@@ -204,21 +293,30 @@ class Index:
         finally:
             conn.close()
 
-    def build_memory_md(self, budget=None):
-        """生成注入用的一句话目录，超出字节预算即截断。"""
+    def build_memory_md(self, budget=None, query=None, limit=None):
+        """生成注入用的目录，超出字节预算即截断。
+
+        有 query 时按相关度召回 Top-N（两段式第一段：只注入相关的）；
+        无 query 时按名字全量输出（兼容旧行为）。
+        """
         self.sync()
         budget = int(budget or self.settings.get("injection_budget_bytes", 8192))
-        conn = self._connect()
-        try:
-            rows = conn.execute(
-                "SELECT id, abstract FROM memories WHERE invalid_at='' AND archived=0 ORDER BY name"
-            ).fetchall()
-        finally:
-            conn.close()
+        if query:
+            hits = self.recall(query, limit=limit)
+            ordered = [(h["abstract"], h["id"]) for h in hits]
+        else:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT id, abstract FROM memories WHERE invalid_at='' AND archived=0 ORDER BY name"
+                ).fetchall()
+            finally:
+                conn.close()
+            ordered = [(row["abstract"], row["id"]) for row in rows]
         lines = []
         used = 0
-        for row in rows:
-            line = "- %s [%s]\n" % (row["abstract"], row["id"])
+        for abstract, entry_id in ordered:
+            line = "- %s [%s]\n" % (abstract, entry_id)
             size = len(line.encode("utf-8"))
             if used + size > budget:
                 break
