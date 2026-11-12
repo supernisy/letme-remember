@@ -11,3 +11,8 @@ jieba==0.42.1
 # 不影响任何现有功能。需要语义召回（换说法/概念联想）时再安装。
 # sentence-transformers
 
+# 测试依赖（dev，非运行时）：pytest 运行测试、pytest-cov 生成覆盖率报告。
+# 分层：tests/unit（纯逻辑）、tests/integration（模块协作）、tests/e2e（全流程）。
+# pytest>=9.0
+# pytest-cov>=7.0
+
