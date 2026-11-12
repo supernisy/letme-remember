@@ -38,10 +38,12 @@ def _load():
         return None
     try:
         name = os.environ.get("LMR_EMBED_MODEL") or DEFAULT_MODEL
-        # 国内直连 huggingface.co 常被墙；默认走 hf-mirror 镜像下载。
-        # 模型已落本地缓存时（~/.cache/huggingface）不会再走网络。
+        # 国内直连 huggingface.co 常被墙：默认走 hf-mirror 镜像，且离线优先。
+        # 模型已落本地缓存时（~/.cache/huggingface）不再联网验证，避免 SSL 重试白耗。
         os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-        _model = SentenceTransformer(name)
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+        _model = SentenceTransformer(name, local_files_only=True)
         _model_name = name
 
         def _embed(texts):

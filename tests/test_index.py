@@ -3,6 +3,7 @@
 import os
 import socket
 from pathlib import Path
+from unittest import mock
 
 from lmr import config, index, tokenizer
 from tests.base import MemTestCase
@@ -123,6 +124,7 @@ class TestIndex(MemTestCase):
 
     def test_embedding_degradation_when_disabled(self):
         # embedding 禁用时，recall 结果 semantic 恒为 0，不影响关键词检索。
+        # 隔离原则：不真加载 120MB 模型，直接设禁用开关短路 _load()。
         os.environ[config.ENV_DISABLE_EMBEDDING] = "1"
         try:
             from lmr import embedding
@@ -138,7 +140,19 @@ class TestIndex(MemTestCase):
 
     def test_embedding_available_flag(self):
         # embedding 模块：未装依赖时 available() 为 False，且不抛异常。
+        # 隔离原则：mock 掉 sentence_transformers 的 import，避免在依赖已装的
+        # 环境里真加载模型/联网，导致测试挂起或变慢。
         from lmr import embedding
+        import builtins
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "sentence_transformers" or name.startswith("sentence_transformers."):
+                raise ImportError("模拟未安装 sentence-transformers")
+            return real_import(name, *args, **kwargs)
+
         embedding.reset_cache()
-        self.assertIn(embedding.available(), (True, False))
+        with mock.patch("builtins.__import__", side_effect=fake_import):
+            self.assertFalse(embedding.available())
+        embedding.reset_cache()
 

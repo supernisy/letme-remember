@@ -14,6 +14,7 @@ from pathlib import Path
 
 from . import frontmatter, schema, tokenizer
 from . import embedding as _emb
+from . import config
 from .errors import InternalError
 
 SCHEMA_SQL = """
@@ -98,7 +99,10 @@ class Index:
         )
 
     def _embedding_on(self):
-        """语义检索是否启用（配置开关 + 依赖可用）。"""
+        """语义检索是否启用（配置开关 + 环境开关 + 依赖可用）。"""
+        import os
+        if os.environ.get(config.ENV_DISABLE_EMBEDDING) == "1":
+            return False
         if not self.settings.get("embedding_enabled", True):
             return False
         return _emb.available()
