@@ -56,10 +56,34 @@ class TestVerdict(unittest.TestCase):
         self.assertEqual(detail["rule"], "exclude:process-marker")
 
     def test_exclude_no_frontmatter(self):
-        # 明确排除：无文件头（碎片）
+        # 明确排除：无文件头且无结论/理由结构（碎片）
         verdict, detail = importprep._verdict_for("随便一段没有结构的文本", "other")
         self.assertEqual(verdict, importprep.VERDICT_EXCLUDE)
         self.assertEqual(detail["rule"], "exclude:no-frontmatter")
+
+    def test_review_missing_frontmatter_with_structure(self):
+        # 待裁决：无文件头但正文含「结论」「理由」两节（有价值缺形状）
+        text = """# 规则：规则不进检索池
+
+## 结论
+
+打分解决相关性，规则解决版本问题。
+
+## 理由
+
+规则新旧语义几乎一样，检索必然捞到旧的。
+"""
+        verdict, detail = importprep._verdict_for(text, "rule-file")
+        self.assertEqual(verdict, importprep.VERDICT_REVIEW)
+        self.assertEqual(detail["rule"], "review:missing-frontmatter")
+        self.assertIn("missing-frontmatter", detail["needs_human"])
+
+    def test_exclude_log_category_even_with_structure(self):
+        # 来源类别优先：log 类别即使有结论理由，仍排除
+        text = """## 结论\n\n某条结论。\n\n## 理由\n\n某条理由。\n"""
+        verdict, detail = importprep._verdict_for(text, "log")
+        self.assertEqual(verdict, importprep.VERDICT_EXCLUDE)
+        self.assertEqual(detail["rule"], "exclude:source-category")
 
     def test_exclude_no_conclusion_reason(self):
         # 明确排除：有文件头但正文无「结论」「理由」两节
@@ -124,6 +148,30 @@ class TestHelpers(unittest.TestCase):
     def test_split_entries_plain(self):
         entries = importprep._split_entries("没有文件头的纯文本")
         self.assertEqual(len(entries), 1)
+
+    def test_split_entries_horizontal_rule_not_split(self):
+        # 水平线 --- 后跟正文/标题（非字段行），不误切
+        text = """# 规则标题
+
+## 结论
+
+某结论。
+
+---
+
+## 理由
+
+某理由。
+"""
+        entries = importprep._split_entries(text)
+        self.assertEqual(len(entries), 1)
+
+    def test_split_entries_mixed_frontmatter_and_rule(self):
+        # 合法 frontmatter 块 + 正文里的水平线：只按合法块切分
+        ok = _ok_text()
+        text = ok + "\n---\n" + ok.replace("笔记", "日志")
+        entries = importprep._split_entries(text)
+        self.assertEqual(len(entries), 2)
 
 
 class TestReportDesensitized(unittest.TestCase):

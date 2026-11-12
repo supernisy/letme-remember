@@ -74,43 +74,59 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _is_frontmatter_open(lines: list[str], idx: int) -> bool:
+    """判断第 idx 行是否为 frontmatter 起始分隔线（而非 Markdown 水平线）。
+
+    frontmatter 起始 `---` 之后的下一个非空行必须是合法字段行（key: value，
+    key 属 frontmatter.FIELDS 白名单）；否则视为 Markdown 水平线。
+    """
+    for j in range(idx + 1, len(lines)):
+        ln = lines[j].strip()
+        if not ln:
+            continue
+        # 下一非空行必须形如「key: value」，且 key 是已知字段。
+        if ":" not in ln:
+            return False
+        key = ln.split(":", 1)[0].strip()
+        return key in frontmatter.FIELDS
+    return False
+
+
 def _split_entries(text: str) -> list[str]:
     """把源文本按条目切分。
 
     一个源文件通常是「一条记忆」（含 frontmatter + 结论/理由正文）。
     当文件里连续出现多个完整 frontmatter 块时，按「--- ... ---」边界
-    切分成多条。无 frontmatter 时整段作为一条（交给判定层处理）。
+    切分成多条。无 frontmatter（或只有 Markdown 水平线）时整段作为一条
+    （交给判定层处理）。水平线 `---` 后跟正文/标题而非字段行，不参与切分。
     """
     normalized = text.replace("\r\n", "\n")
     lines = normalized.split("\n")
-    # 找出所有独立成行的 --- 分隔线位置。
-    delim_idx = [i for i, ln in enumerate(lines) if ln.strip() == "---"]
-    if not delim_idx:
+
+    # 找出所有「合法 frontmatter 起始」的行号。
+    open_idx = [i for i, ln in enumerate(lines)
+                if ln.strip() == "---" and _is_frontmatter_open(lines, i)]
+    if not open_idx:
         return [normalized]
 
+    # 找每个起始对应的闭头（块内第二个 ---）。
     chunks: list[str] = []
-    start = 0
-    # 每个 frontmatter 块从「---」开始，到下一个「---」（闭头）后再吞正文，
-    # 直到遇到下一个「---」（下一块的开头）。
-    i = 0
-    while i < len(delim_idx):
-        block_start = delim_idx[i]
-        # 找闭头：块内第二个 --- 即文件头结束线。
-        if i + 1 < len(delim_idx):
-            block_end = delim_idx[i + 1]
-            # 下一块的开头是 delim_idx[i+2]（若存在）
-            if i + 2 < len(delim_idx):
-                next_start = delim_idx[i + 2]
-                chunks.append("\n".join(lines[block_start:next_start]))
-                i += 2
-            else:
-                # 只有一对 ---（文件头），后面是正文到文件尾。
-                chunks.append("\n".join(lines[block_start:]))
-                i += 2
-        else:
-            chunks.append("\n".join(lines[block_start:]))
-            i += 1
+    for i, block_start in enumerate(open_idx):
+        # 闭头：block_start 之后的第一个独立成行 ---。
+        block_end = None
+        for j in range(block_start + 1, len(lines)):
+            if lines[j].strip() == "---":
+                block_end = j
+                break
+        if block_end is None:
+            # 无闭头，不算合法块，整段留到文件尾由判定层处理。
+            continue
+        # 正文吞到下一个合法 frontmatter 起始（若存在），否则到文件尾。
+        next_start = open_idx[i + 1] if i + 1 < len(open_idx) else len(lines)
+        chunks.append("\n".join(lines[block_start:next_start]))
 
+    if not chunks:
+        return [normalized]
     return [c for c in chunks if c.strip()]
 
 
@@ -142,10 +158,18 @@ def _verdict_for(text: str, source_category: str) -> tuple[str, dict]:
         detail["rule"] = "exclude:process-marker"
         return VERDICT_EXCLUDE, detail
 
-    # 2) 尝试解析文件头；解析失败即无结构，视为碎片 → 明确排除。
+    # 2) 尝试解析文件头；解析失败即无 frontmatter。
+    #    此时查正文是否含「结论+理由」两节：
+    #    有 → 待裁决（有价值但缺形状，提示补 frontmatter）；
+    #    无 → 明确排除（碎片）。
     try:
         meta, body = frontmatter.parse(text)
     except Exception:
+        sections = frontmatter.body_sections(text)
+        if sections["结论"] and sections["理由"]:
+            detail["rule"] = "review:missing-frontmatter"
+            detail["needs_human"].append("missing-frontmatter")
+            return VERDICT_REVIEW, detail
         detail["rule"] = "exclude:no-frontmatter"
         return VERDICT_EXCLUDE, detail
 
