@@ -29,3 +29,8 @@ Thumbs.db
 /_*.py
 /_*.json
 /_*.txt
+
+# 测试覆盖率缓存
+.coverage
+htmlcov/
+.pytest_cache/
