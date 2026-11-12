@@ -10,7 +10,7 @@ from unittest import mock
 
 from lmr import host as host_module
 from lmr.errors import ValidationError
-from lmr.host.workbuddy import WorkBuddyAdapter
+from lmr.host.workbuddy import WorkBuddyAdapter, REPO_ROOT
 
 
 class HostRegistryTest(unittest.TestCase):
@@ -47,31 +47,65 @@ class WorkBuddyAdapterTest(unittest.TestCase):
         patcher_settings.start()
         patcher_hooks.start()
 
-        # 用 fake paths（install 只用到生成脚本，不真正读 paths）。
+        # fake paths：只需 root（数据目录）真实存在即可。
         self.paths = mock.Mock()
+        self.paths.root = Path(self.tmp.name) / "data"
+        self.paths.root.mkdir()
 
     def test_install_generates_scripts_and_registers(self):
         adapter = WorkBuddyAdapter()
         result = adapter.install(self.paths)
-        # 生成了两个脚本
+        # 生成了两个脚本（stop 蒸馏 + recall 注入）
         self.assertTrue(result["stop_script"].endswith("lmr_stop.py"))
-        self.assertTrue(result["start_script"].endswith("lmr_session_start.py"))
-        # 注册了两个 hook
-        self.assertTrue(result["registered"]["stop"])
-        self.assertTrue(result["registered"]["session_start"])
+        self.assertTrue(result["recall_script"].endswith("lmr_recall.py"))
+        # 注册了两个 hook（Stop + UserPromptSubmit）
+        self.assertTrue(result["registered"]["Stop"])
+        self.assertTrue(result["registered"]["UserPromptSubmit"])
 
     def test_install_idempotent(self):
         adapter = WorkBuddyAdapter()
         adapter.install(self.paths)
         result = adapter.install(self.paths)  # 第二次
         # 已注册，不重复添加
-        self.assertFalse(result["registered"]["stop"])
-        self.assertFalse(result["registered"]["session_start"])
+        self.assertFalse(result["registered"]["Stop"])
+        self.assertFalse(result["registered"]["UserPromptSubmit"])
 
-    def test_on_session_start_returns_inject(self):
+    def test_on_recall_returns_recall(self):
         adapter = WorkBuddyAdapter()
-        self.assertIn("inject", adapter.on_session_start())
+        self.assertIn("recall", adapter.on_recall())
 
-    def test_on_session_end_returns_distill(self):
+    def test_on_capture_returns_capture(self):
         adapter = WorkBuddyAdapter()
-        self.assertIn("batch-distill", adapter.on_session_end("/tmp/transcript.txt"))
+        self.assertIn("capture", adapter.on_capture("/tmp/transcript.txt"))
+
+    def test_stop_script_uses_real_mem_py_and_transcript_from_stdin(self):
+        adapter = WorkBuddyAdapter()
+        script = adapter._stop_script(self.paths)
+        # mem.py 用代码仓库根的路径（%r 格式化为 repr，含转义），
+        # 断言 mem.py 关键字与 repo 名同时出现即可。
+        self.assertIn("mem.py", script)
+        self.assertIn(REPO_ROOT.name, script)
+        # 从 stdin 读 transcript_path，无占位符
+        self.assertIn("transcript_path", script)
+        self.assertNotIn("TRANSCRIPT_PLACEHOLDER", script)
+        self.assertIn("batch-distill", script)
+        self.assertIn("--dry-run", script)
+
+    def test_recall_script_calls_inject(self):
+        adapter = WorkBuddyAdapter()
+        script = adapter._recall_script(self.paths)
+        self.assertIn("inject", script)
+        self.assertIn("mem.py", script)
+        self.assertIn("--data-dir", script)
+
+    def test_register_writes_valid_settings_json(self):
+        adapter = WorkBuddyAdapter()
+        adapter.install(self.paths)
+        # settings.json 是合法 JSON，且 hooks 含 Stop 和 UserPromptSubmit
+        data = json.loads(self.settings_path.read_text(encoding="utf-8"))
+        self.assertIn("Stop", data["hooks"])
+        self.assertIn("UserPromptSubmit", data["hooks"])
+        # 每个 hook 都是 command 类型
+        for entry in data["hooks"]["Stop"]:
+            for hook in entry["hooks"]:
+                self.assertEqual(hook["type"], "command")
