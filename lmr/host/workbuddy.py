@@ -28,11 +28,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 WB_DIR = Path.home() / ".workbuddy"
 WB_SETTINGS = WB_DIR / "settings.json"
 WB_HOOKS_DIR = WB_DIR / "hooks"
+# 解释器路径：用正斜杠（Windows 下反斜杠写进 JSON 会被当转义序列，
+# 曾导致「Userssuper.workuddy」残缺路径、所有会话报错的事故）。
 WB_PYTHON = "C:/Users/super/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
+# 安全包装器：保证「目标脚本找不到/崩溃 → exit 0 放行，仅透传 exit 2 拦截」。
+# 所有 hook 的 command 都经它调用，绝不让主流程卡死。
+WB_HOOK_RUNNER = "C:/Users/super/.workbuddy/hooks/hook_runner.py"
 
 
 def _hook_script_path(name):
     return WB_HOOKS_DIR / ("lmr_%s.py" % name)
+
+
+def _posix(p) -> str:
+    """把路径转成正斜杠字符串，避免反斜杠写进 JSON 被转义吞掉。"""
+    return Path(p).as_posix()
 
 
 class WorkBuddyAdapter(HostAdapter):
@@ -67,20 +77,28 @@ class WorkBuddyAdapter(HostAdapter):
         return installed
 
     def _stop_script(self, paths) -> str:
-        """Stop hook：从 stdin 读 transcript_path，后台异步蒸馏，不阻塞。"""
-        mem_py = str(REPO_ROOT / "mem.py")
+        """Stop hook：从 stdin 读 transcript_path，后台异步蒸馏，不阻塞。
+
+        自保护：mem.py 找不到 / 读 stdin 失败 → 静默放行（exit 0）。
+        """
+        mem_py = _posix(REPO_ROOT / "mem.py")
         data_dir = str(paths.root)
         return '''"""WorkBuddy Stop hook：会话结束后台异步蒸馏，不阻塞对话。
 
 薄壳：从 stdin 读 hook JSON 拿 transcript_path，转成对 mem.py
 batch-distill 的调用；蒸馏逻辑在 lmr 引擎里。后台执行，快速返回。
+自保护：mem.py 找不到 / 读 stdin 失败 → 静默放行（exit 0）。
 """
 import json
+import os
 import subprocess
 import sys
 
 MEM_PY = %r
 DATA_DIR = %r
+
+if not os.path.isfile(MEM_PY):
+    sys.exit(0)  # mem.py 不存在 → 放行
 
 try:
     payload = json.loads(sys.stdin.read())
@@ -96,29 +114,46 @@ if transcript:
 ''' % (mem_py, data_dir)
 
     def _recall_script(self, paths) -> str:
-        """UserPromptSubmit hook：召回相关记忆注入上下文。"""
-        mem_py = str(REPO_ROOT / "mem.py")
+        """UserPromptSubmit hook：召回相关记忆注入上下文。
+
+        薄壳：调用 mem.py inject 输出记忆目录（一句话摘要），零模型零网络。
+        stdout 作为 additionalContext 注入宿主本轮上下文。
+        自保护：mem.py 找不到 / 调用失败 → 静默放行（exit 0），不挡主流程。
+        """
+        mem_py = _posix(REPO_ROOT / "mem.py")
         data_dir = str(paths.root)
         return '''"""WorkBuddy UserPromptSubmit hook：召回相关记忆注入上下文。
 
 薄壳：调用 mem.py inject 输出记忆目录（一句话摘要），零模型零网络。
 stdout 作为 additionalContext 注入宿主本轮上下文。
+自保护：mem.py 找不到 / 调用失败 → 静默放行（exit 0），不挡主流程。
 """
+import os
 import subprocess
 import sys
 
 MEM_PY = %r
 DATA_DIR = %r
 
-result = subprocess.run(
-    [sys.executable, MEM_PY, "inject", "--data-dir", DATA_DIR],
-    capture_output=True, text=True, encoding="utf-8",
-)
-print(result.stdout, end="")
+if not os.path.isfile(MEM_PY):
+    sys.exit(0)  # mem.py 不存在 → 放行，绝不让主流程卡死
+
+try:
+    result = subprocess.run(
+        [sys.executable, MEM_PY, "inject", "--data-dir", DATA_DIR],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    print(result.stdout, end="")
+except Exception:
+    sys.exit(0)  # 任何异常 → 放行
 ''' % (mem_py, data_dir)
 
     def _register_hooks(self) -> dict:
-        """把 hook 注册进 settings.json，幂等（已存在则跳过）。"""
+        """把 hook 注册进 settings.json，幂等（已存在则跳过）。
+
+        路径一律转正斜杠（as_posix），并经由 hook_runner 包装器调用，
+        避免反斜杠被 JSON 转义吞掉、以及脚本异常导致主流程卡死。
+        """
         if not WB_SETTINGS.is_file():
             settings = {}
         else:
@@ -127,8 +162,8 @@ print(result.stdout, end="")
             except ValueError:
                 settings = {}
         hooks = settings.setdefault("hooks", {})
-        stop_path = str(_hook_script_path("stop"))
-        recall_path = str(_hook_script_path("recall"))
+        stop_path = _posix(_hook_script_path("stop"))
+        recall_path = _posix(_hook_script_path("recall"))
 
         added = {"Stop": False, "UserPromptSubmit": False}
 
@@ -136,7 +171,9 @@ print(result.stdout, end="")
         stop_entries = hooks.setdefault("Stop", [])
         if not self._already_registered(stop_entries, stop_path):
             stop_entries.append({
-                "hooks": [{"type": "command", "command": "%s %s" % (WB_PYTHON, stop_path), "timeout": 5}],
+                "hooks": [{"type": "command",
+                           "command": "%s %s %s" % (WB_PYTHON, WB_HOOK_RUNNER, stop_path),
+                           "timeout": 5}],
             })
             added["Stop"] = True
 
@@ -144,7 +181,9 @@ print(result.stdout, end="")
         recall_entries = hooks.setdefault("UserPromptSubmit", [])
         if not self._already_registered(recall_entries, recall_path):
             recall_entries.append({
-                "hooks": [{"type": "command", "command": "%s %s" % (WB_PYTHON, recall_path), "timeout": 15}],
+                "hooks": [{"type": "command",
+                           "command": "%s %s %s" % (WB_PYTHON, WB_HOOK_RUNNER, recall_path),
+                           "timeout": 15}],
             })
             added["UserPromptSubmit"] = True
 
