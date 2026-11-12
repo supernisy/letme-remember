@@ -16,6 +16,7 @@ from . import config, distill, index, proposal, queue, store
 from . import llm as llm_module
 from . import judgment
 from . import host as host_module
+from . import backup as backup_module
 from .errors import EXIT_INTERNAL, EXIT_OK, EXIT_VALIDATION, MemError, NotFoundError, ValidationError
 
 CANDIDATE_FIELDS = (
@@ -135,6 +136,12 @@ def _build_parser():
 
     setup_cmd = sub.add_parser("setup", parents=[common], help="把记忆能力接入宿主（无感集成）")
     setup_cmd.add_argument("--host", required=True, help="宿主名（可用: workbuddy）")
+
+    backup_cmd = sub.add_parser("backup", parents=[common], help="加密数据目录并产出密文备份")
+    backup_cmd.add_argument("--target", help="备份产物目录（默认数据目录下 backup/）")
+
+    restore_cmd = sub.add_parser("restore", parents=[common], help="用本地密钥解密备份并恢复")
+    restore_cmd.add_argument("backup_file", help="备份密文文件路径")
 
     return root
 
@@ -476,6 +483,18 @@ def cmd_setup(args):
     return adapter.install(paths)
 
 
+def cmd_backup(args):
+    """加密数据目录并产出密文备份。加密库未装时优雅降级为未配置提示。"""
+    paths, settings = _paths(args)
+    return backup_module.backup(paths, settings, target_dir=args.target)
+
+
+def cmd_restore(args):
+    """用本地密钥解密备份并恢复数据目录。密钥缺失时明确报错。"""
+    paths, settings = _paths(args)
+    return backup_module.restore(paths, settings, args.backup_file)
+
+
 HANDLERS = {
     "init": cmd_init,
     "record": cmd_record,
@@ -498,6 +517,8 @@ HANDLERS = {
     "purge": cmd_purge,
     "queue": cmd_queue,
     "setup": cmd_setup,
+    "backup": cmd_backup,
+    "restore": cmd_restore,
 }
 
 
