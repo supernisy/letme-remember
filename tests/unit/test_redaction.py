@@ -4,6 +4,10 @@ import unittest
 
 from lmr import redaction
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 # @req 3.1 @req 3.2
 
 

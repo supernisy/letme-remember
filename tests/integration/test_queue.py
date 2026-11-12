@@ -9,6 +9,10 @@ from lmr.errors import NotFoundError, ValidationError
 
 from tests.base import MemTestCase, candidate
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 class QueueEnqueueTest(MemTestCase):
     def test_enqueue_l1_creates_pending(self):

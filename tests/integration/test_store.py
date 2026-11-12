@@ -8,7 +8,11 @@ from lmr import config, distill, frontmatter, gitutil, index, proposal, redactio
 from lmr.errors import ValidationError
 from tests.base import MemTestCase, candidate
 
-ROOT = Path(__file__).resolve().parents[1]
+import pytest
+
+pytestmark = pytest.mark.integration
+
+ROOT = Path(__file__).resolve().parents[2]
 
 # @req 1.1 @req 1.2 @req 1.3 @req 2.3 @req 2.4
 # @req 3.3 @req 3.4 @req 3.5 @req 3.6 @req 3.7

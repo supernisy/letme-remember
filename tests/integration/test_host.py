@@ -12,6 +12,10 @@ from lmr import host as host_module
 from lmr.errors import ValidationError
 from lmr.host.workbuddy import WorkBuddyAdapter, REPO_ROOT
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 class HostRegistryTest(unittest.TestCase):
     def test_get_host_workbuddy(self):

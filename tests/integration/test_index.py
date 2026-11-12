@@ -8,7 +8,11 @@ from unittest import mock
 from lmr import config, index, tokenizer
 from tests.base import MemTestCase
 
-ROOT = Path(__file__).resolve().parents[1]
+import pytest
+
+pytestmark = pytest.mark.integration
+
+ROOT = Path(__file__).resolve().parents[2]
 
 # @req 4.1 @req 4.2 @req 4.3 @req 4.4 @req 4.5 @req 4.6
 

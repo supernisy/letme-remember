@@ -9,6 +9,10 @@ from lmr import backup as backup_module
 from lmr.errors import ValidationError
 from tests.base import MemTestCase, candidate
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 class BackupNoCryptoTest(MemTestCase):
     """未安装加密库时，backup 优雅降级为明确的未配置提示。"""

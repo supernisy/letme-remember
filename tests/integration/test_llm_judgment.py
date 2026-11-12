@@ -9,6 +9,10 @@ import unittest
 from lmr import judgment
 from lmr.llm import LLMUnavailable, resolve_api_key
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 
 class TestParseReport(unittest.TestCase):
     def test_parse_clean_json(self):

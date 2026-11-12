@@ -14,7 +14,11 @@ from unittest.mock import patch
 
 from lmr import cli
 
-ROOT = Path(__file__).resolve().parents[1]
+import pytest
+
+pytestmark = pytest.mark.e2e
+
+ROOT = Path(__file__).resolve().parents[2]
 SENSITIVE = re.compile(r"薪资|职业定位|谈判|公司|前端|全栈|月薪|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}")
 
 # @req 1.4 @req 5.1 @req 5.2 @req 5.3 @req 6.1 @req 6.2 @req 6.3

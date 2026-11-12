@@ -7,6 +7,10 @@ from lmr.errors import ValidationError
 from tests.base import candidate
 from lmr.store import build_candidate
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 # @req 2.2
 
 

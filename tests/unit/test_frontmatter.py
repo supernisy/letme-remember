@@ -5,6 +5,10 @@ import unittest
 from lmr import frontmatter as fm
 from lmr.errors import FrontmatterError
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 # @req 2.1
 
 
