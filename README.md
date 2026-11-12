@@ -13,7 +13,10 @@
 
 ## 当前状态
 
-v1 最小闭环已实现：**写入一条结论 → 中文关键词查得到 → 按日期查回当时的真相**，并带可撤销的私有 git 审计。
+- **v1 最小闭环**：写入一条结论 → 中文关键词查得到 → 按日期查回当时的真相，带可撤销的私有 git 审计。
+- **v1.1 冲突检测 + LLM 蒸馏**：可插拔 LLM 软判断（第二审）、冲突检测（ADD/UPDATE/SUPERSEDE/NOOP）、自动去重合并 `consolidate`、批量蒸馏（结论 + reference 双轨）、SUPERSEDE 时间维度守卫。
+- **v1.2 无感集成 + 待审队列 + 备份**：宿主无感集成层（`setup --host`）、待审队列（L1/L2 异步入库审批）、加密备份（密钥不上云）。
+
 开发方式为 OpenSpec 规范驱动（spec-driven），规范在 `openspec/specs/`，变更提案在 `openspec/changes/`。
 
 ## 隐私边界（最重要）
@@ -56,7 +59,26 @@ mem list                       # 输出一句话摘要目录
 
 `--candidate <JSON 文件>` 可一次提交完整候选；`mem <命令> --help` 查看全部参数。
 
-**辅助命令**：`inject`（按字节预算输出注入用目录）、`distill`（批量候选，原子预校验）、`propose` / `apply` / `proposals`（审批提案）、`undo`、`undo-batch <批次>`、`archive`。
+**辅助命令**：`inject`（按字节预算输出注入用目录）、`distill`（批量候选，原子预校验）、`propose` / `apply` / `proposals`（审批提案）、`undo`、`undo-batch <批次>`、`archive`、`judge`（软判断分级）、`consolidate`（自动去重落库）、`queue`（待审队列）、`setup --host`（宿主集成）、`backup` / `restore`（加密备份）。
+
+## 无感集成（v1.2）
+
+```bash
+mem setup --host workbuddy   # 一键把记忆能力接入 WorkBuddy（生成 hook 脚本 + 注册事件）
+```
+
+接入后，宿主在**会话结束**自动后台蒸馏候选，在**会话开始**自动注入记忆索引，用户无需手动维护。
+
+候选蒸馏后按风险分级：L0（无冲突、低重要）静默入库；L1/L2 进入**待审队列**，用 `mem queue list` 查看、`mem queue approve <id>` / `mem queue reject <id>` 处理；超时（默认 7 天）自动降级到 archive 冷存储，绝不静默丢弃。
+
+## 加密备份（v1.2）
+
+```bash
+mem backup            # 本地加密数据目录，产出密文备份（密钥存 ~/.letme-remember/backup.key）
+mem restore <备份文件>  # 用本地密钥解密恢复
+```
+
+**红线**：备份在本地加密，云端只存密文；密钥永不上云。**请把 `backup.key` 离线备份到 U 盘或密码管理器**——密钥丢失则云端密文无法恢复。加密依赖 `cryptography`（可选），未安装时 `backup`/`restore` 会明确提示未配置，不影响核心读写。
 
 ## 一条记忆长什么样
 
