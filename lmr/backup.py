@@ -170,7 +170,7 @@ def sync(paths, settings, target_dir=None):
     result = backup(paths, settings, target_dir=target_dir)
     target = Path(result["file"]).parent
     _ensure_backup_repo(target)
-    gitutil.commit(target, "backup %s" % result["file"])
+    gitutil.commit(target, "backup %s" % Path(result["file"]).name)
     remote = _remote(paths, settings)
     if not remote:
         return dict(result, synced=False, reason="未配置云端目标（backup.remote）")
