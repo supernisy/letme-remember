@@ -15,6 +15,7 @@ from pathlib import Path
 from . import config, distill, index, proposal, queue, store
 from . import llm as llm_module
 from . import judgment
+from . import host as host_module
 from .errors import EXIT_INTERNAL, EXIT_OK, EXIT_VALIDATION, MemError, NotFoundError, ValidationError
 
 CANDIDATE_FIELDS = (
@@ -131,6 +132,9 @@ def _build_parser():
                            help="list（查看待审）/ approve <id>（批准入库）/ reject <id>（驳回）/ expire（超时降级）")
     queue_cmd.add_argument("entry_id", nargs="?", default="", help="approve/reject 时的候选 id")
     queue_cmd.add_argument("--days", type=int, default=None, help="expire 的超时天数（默认 7）")
+
+    setup_cmd = sub.add_parser("setup", parents=[common], help="把记忆能力接入宿主（无感集成）")
+    setup_cmd.add_argument("--host", required=True, help="宿主名（可用: workbuddy）")
 
     return root
 
@@ -465,6 +469,13 @@ def cmd_queue(args):
     raise ValidationError("未知的 queue 子操作: %s" % action)
 
 
+def cmd_setup(args):
+    """把记忆能力接入宿主：生成适配器 hook 脚本并注册到宿主配置。"""
+    paths, _ = _paths(args, allow_missing=True)
+    adapter = host_module.get_host(args.host)
+    return adapter.install(paths)
+
+
 HANDLERS = {
     "init": cmd_init,
     "record": cmd_record,
@@ -486,6 +497,7 @@ HANDLERS = {
     "archive": cmd_archive,
     "purge": cmd_purge,
     "queue": cmd_queue,
+    "setup": cmd_setup,
 }
 
 
