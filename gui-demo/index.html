@@ -71,9 +71,10 @@
   .mem-list{display:flex; flex-direction:column; gap:8px;}
   .mem{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; cursor:pointer; transition:border-color .15s;}
   .mem:hover{border-color:#3d4452;}
-  .mem .top{display:flex; align-items:center; gap:10px; margin-bottom:6px;}
-  .mem .tname{font-weight:500; font-size:13px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .mem .top{display:flex; align-items:center; gap:10px; margin-bottom:3px;}
+  .mem .tname{font-weight:500; font-size:14px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .mem .tag{font-size:11px; padding:2px 9px; border-radius:12px; flex-shrink:0;}
+  .mem .techname{font-size:11px; color:var(--hint); font-family:ui-monospace,"SF Mono",Consolas,monospace; margin-bottom:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .mem .abstract{font-size:13px; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
   .mem .meta{display:flex; gap:14px; font-size:11px; color:var(--hint); margin-top:8px; flex-wrap:wrap;}
   .tag.semantic{background:rgba(93,194,160,.15); color:var(--semantic);}
@@ -93,11 +94,58 @@
   .detail .kv .v{color:var(--txt); word-break:break-all;}
   .detail h3{font-size:13px; font-weight:600; color:var(--muted); margin:16px 0 8px;}
   .detail .body{font-size:13px; color:var(--txt); line-height:1.7; white-space:pre-wrap;}
+  .detail .body.conclusion{font-weight:600; font-size:14px; color:var(--txt);}
+  .detail .techname{font-size:11px; color:var(--hint); font-family:ui-monospace,"SF Mono",Consolas,monospace; margin-bottom:10px; word-break:break-all;}
+  .pointer-hint{background:rgba(239,159,39,.12); border:1px solid rgba(239,159,39,.35); color:var(--amber); font-size:12px; padding:8px 12px; border-radius:8px; margin-bottom:14px;}
 
   .empty{text-align:center; color:var(--hint); padding:40px 0; font-size:13px;}
   .foot{color:var(--hint); font-size:12px; margin-top:40px; padding-top:16px; border-top:1px solid var(--line);}
 
+  /* 系统运行状态：红绿灯卡片 */
+  .sys-status{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px;}
+  .sys-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:default;}
+  .sys-card .light{width:12px; height:12px; border-radius:50%; flex-shrink:0; box-shadow:0 0 0 3px rgba(99,201,149,.15);}
+  .sys-card .light.ok{background:var(--green); box-shadow:0 0 0 3px rgba(99,201,149,.15);}
+  .sys-card .light.warn{background:var(--amber); box-shadow:0 0 0 3px rgba(239,159,39,.15);}
+  .sys-card .light.off{background:var(--red); box-shadow:0 0 0 3px rgba(226,74,74,.15);}
+  .sys-card .light.gray{background:var(--hint); box-shadow:0 0 0 3px rgba(92,101,115,.15);}
+  .sys-card .sinfo{flex:1;}
+  .sys-card .sname{font-size:13px; font-weight:600; margin-bottom:1px;}
+  .sys-card .sdesc{font-size:11px; color:var(--muted); line-height:1.45;}
+
+  /* 顶部一句话健康判定 */
+  .verdict{display:flex; align-items:center; gap:14px; padding:16px 20px; border-radius:12px; margin-bottom:24px; border:1px solid var(--line); background:var(--panel);}
+  .verdict .vdot{width:14px; height:14px; border-radius:50%; flex-shrink:0;}
+  .verdict .vdot.ok{background:var(--green); box-shadow:0 0 0 4px rgba(99,201,149,.15);}
+  .verdict .vdot.warn{background:var(--amber); box-shadow:0 0 0 4px rgba(239,159,39,.15);}
+  .verdict .vdot.bad{background:var(--red); box-shadow:0 0 0 4px rgba(226,74,74,.15);}
+  .verdict .vtext{flex:1; font-size:15px; font-weight:600; line-height:1.5;}
+  .verdict .vsub{font-size:12px; color:var(--muted); font-weight:400; margin-top:2px;}
+
+  /* 分级待办 */
+  .insight .prio{font-size:11px; font-weight:600; padding:2px 8px; border-radius:6px; flex-shrink:0; margin-top:1px; white-space:nowrap;}
+  .insight .prio.p0{background:rgba(226,74,74,.18); color:var(--red);}
+  .insight .prio.p1{background:rgba(239,159,39,.18); color:var(--amber);}
+  .insight .prio.p2{background:rgba(90,101,115,.22); color:var(--hint);}
+  .insight .prio.info{background:rgba(127,141,224,.18); color:var(--procedural);}
+  .insight .action{display:inline-block; margin-top:6px; font-size:12px; color:var(--procedural); background:rgba(127,141,224,.12); padding:3px 10px; border-radius:6px; cursor:pointer;}
+  .insight .action:hover{background:rgba(127,141,224,.22);}
+
   .health-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px;}
+
+  /* 结论优先区：首页顶部可行动判断 */
+  .insights{display:flex; flex-direction:column; gap:10px; margin-bottom:26px;}
+  .insight{display:flex; align-items:flex-start; gap:12px; background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--amber); border-radius:10px; padding:14px 16px;}
+  .insight.red{border-left-color:var(--red);}
+  .insight.green{border-left-color:var(--green);}
+  .insight .seal{font-size:11px; padding:2px 8px; border-radius:6px; flex-shrink:0; margin-top:2px; font-weight:600;}
+  .insight .seal.act{background:rgba(239,159,39,.15); color:var(--amber);}
+  .insight .seal.warn{background:rgba(226,74,74,.15); color:var(--red);}
+  .insight .seal.ok{background:rgba(99,201,149,.15); color:var(--green);}
+  .insight .itext{flex:1;}
+  .insight .ititle{font-size:13px; font-weight:600; margin-bottom:2px;}
+  .insight .iwhy{font-size:12px; color:var(--muted); line-height:1.55;}
+
   .hscore-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; display:flex; align-items:center; gap:16px;}
   .hscore-ring{position:relative; width:74px; height:74px; flex-shrink:0;}
   .hscore-ring .ring-num{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:600;}
@@ -141,35 +189,43 @@
       <div class="pagehead">
         <div>
           <h1>总览</h1>
-          <div class="sub">记忆资产 + 健康度一屏速览，数据来自本地 store</div>
+          <div class="sub">系统是否在正常跑 · 有没有要你处理的事</div>
         </div>
         <span class="readonly">只读模式 · 写操作未开放</span>
       </div>
 
+      <div id="verdict" class="verdict"></div>
+
       <div class="section">
-        <div class="section-title">记忆健康 · 速览</div>
-        <div class="health-grid" id="health-cards"></div>
+        <div class="section-title">系统运行状态</div>
+        <div id="sys-status" class="sys-status"></div>
       </div>
 
       <div class="section">
-        <div class="section-title">核心指标</div>
-        <div class="cards">
-          <div class="card"><div class="label">记忆总数</div><div class="num" id="m-total">—</div><div class="subline" id="m-total-sub">—</div></div>
-          <div class="card"><div class="label">语义 Semantic</div><div class="num" style="color:var(--semantic)" id="m-semantic">—</div><div class="subline">事实 / 偏好 / 决策 / 经验</div></div>
-          <div class="card"><div class="label">程序 Procedural</div><div class="num" style="color:var(--procedural)" id="m-procedural">—</div><div class="subline">流程 / 怎么做</div></div>
-          <div class="card"><div class="label">情景 Episodic</div><div class="num" style="color:var(--episodic)" id="m-episodic">—</div><div class="subline">事件 / 时间线</div></div>
+        <div class="section-title">需要你处理</div>
+        <div class="insights" id="insight-list"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">记忆浏览 · 点开看内容</div>
+        <div class="toolbar">
+          <input type="search" id="q-dash" placeholder="搜记忆内容 / 名称 …">
+          <select id="type-filter-dash">
+            <option value="">全部类型</option>
+            <option value="semantic">语义</option>
+            <option value="procedural">程序</option>
+            <option value="episodic">情景</option>
+          </select>
         </div>
+        <div class="mem-list" id="mem-list-dash"></div>
+        <div style="margin-top:12px;font-size:12px;color:var(--muted);text-align:right"><a onclick="switchView('memory')" style="color:var(--muted);text-decoration:underline;cursor:pointer">查看全部记忆 →</a></div>
       </div>
 
       <div class="section">
-        <div class="section-title">类型分布</div>
+        <div class="section-title">记忆资产概况（想深入了解时再看）</div>
         <div class="two">
           <div class="panel">
-            <div class="legend">
-              <span><i style="background:#5dc2a0"></i>semantic</span>
-              <span><i style="background:#7f8de0"></i>procedural</span>
-              <span><i style="background:#e2a25d"></i>episodic</span>
-            </div>
+            <div class="section-title">类型分布</div>
             <div class="donut-wrap">
               <canvas id="donut" width="200" height="200" role="img" aria-label="记忆类型分布环形图"></canvas>
               <div class="donut-legend" id="donut-legend"></div>
@@ -186,19 +242,6 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">写入来源</div>
-        <div class="panel">
-          <div id="author-list" class="donut-legend"></div>
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">待处理问题（按严重度，仅列前 3）</div>
-        <div class="diag-list" id="diag-list-overview"></div>
-        <div style="margin-top:12px;font-size:12px;color:var(--muted);text-align:right"><a onclick="switchView('health')" style="color:var(--muted);text-decoration:underline;cursor:pointer">查看完整体检 →</a></div>
       </div>
     </div>
 
@@ -315,15 +358,134 @@ async function api(path){
 }
 
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function shortAuthor(a){
+  a = String(a||"");
+  // "import:workbuddy-project-memory" -> "workbuddy-project-memory"
+  const p = a.split(":");
+  return p.length > 1 ? p.slice(1).join(":") : a;
+}
+
+function renderSysStatus(){
+  const st = DATA.status;
+  const o = DATA.overview;
+  if(!st) return;
+  const vec = st.vector || {};
+  const emb = st.embedding || {};
+  const vecOn = (vec.indexed || 0) > 0;
+  const cards = [
+    {light: st.serve_running ? "ok":"off",
+     name:"召回服务 serve",
+     desc: st.serve_running ? "常驻运行中，模型常驻、检索毫秒级" : "未运行。当前每次检索都要重新加载模型，慢。"},
+    {light: vecOn ? "ok":"warn",
+     name:"向量库",
+     desc: vecOn ? `已向量化 ${vec.indexed} 条 · ${vec.dim||"?"} 维` : `已向量化 0 条，语义检索没生效（跑 embed 补建）`},
+    {light: emb.enabled ? "ok":"off",
+     name:"embedding 模型",
+     desc: emb.enabled ? (emb.model || "已配置") : "已禁用，语义检索不可用"},
+    {light:"gray", name:"记忆写入",
+     desc:"本期只读，写操作口子未开放（编辑/删除/取代待做）"}
+  ];
+  document.getElementById('sys-status').innerHTML = cards.map(c=>`
+    <div class="sys-card">
+      <span class="light ${c.light}"></span>
+      <div class="sinfo">
+        <div class="sname">${c.name}</div>
+        <div class="sdesc">${c.desc}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderInsights(){
+  const o = DATA.overview;
+  const st = DATA.status;
+  if(!o || !st) return;
+  const vec = o.vector || {};
+  const h = o.health || {};
+  const ins = [];  // 分级待办，只放「有动作」的
+
+  // P0：向量库没建 —— 系统坏了，必须处理
+  if(!(vec.indexed > 0)){
+    ins.push({prio:"p0", prioTxt:"P0 紧急", cls:"red", title:"语义检索失效，向量库是空的",
+      why:`已向量化 0 条，现在搜东西是关键词兜底，搜不到语义相近的记忆。`,
+      action:"跑 embed 补建", actFn:"goEmbed"});
+  }
+
+  // P1：被取代的记忆还占位
+  if(o.superseded > 0){
+    ins.push({prio:"p1", prioTxt:"P1 重要", cls:"", title:`${o.superseded} 条记忆已被取代，还占着位置`,
+      why:"它们不会被当当前事实，但可能混进检索结果。等写操作开放后可归档或清理。",
+      action:"查看这 3 条", actFn:"goSuperseded"});
+  }
+
+  // P2：大量记忆没被用到 —— 观察，别急着动
+  const u = h.utility || {};
+  if(u.score != null && u.score < 20){
+    ins.push({prio:"p2", prioTxt:"P2 观察", cls:"", title:"大量记忆还没被真正用到",
+      why:`只有 ${u.accessed||0} / ${o.total} 条曾被检索命中。可能是刚建库、用得少；持续这样才说明记得太碎或检索捞不出对的。先观察。`,
+      action:"", actFn:""});
+  }
+
+  // P3 信息：importance 缺失
+  if(!o.has_importance){
+    ins.push({prio:"info", prioTxt:"信息", cls:"", title:"记忆没有重要度打分",
+      why:"importance 字段全缺，检索排序无法区分承重墙和可有可无。这是后续重要度分类法要补的口子。",
+      action:"", actFn:""});
+  }
+
+  if(!ins.length){
+    ins.push({prio:"info", prioTxt:"良好", cls:"green", title:"没有需要你处理的事", why:"系统运行正常，记忆库状态良好。", action:"", actFn:""});
+  }
+
+  document.getElementById('insight-list').innerHTML = ins.map(i=>`
+    <div class="insight ${i.cls}">
+      <span class="prio ${i.prio}">${i.prioTxt}</span>
+      <div class="itext">
+        <div class="ititle">${i.title}</div>
+        <div class="iwhy">${i.why}</div>
+        ${i.action ? `<span class="action" onclick="${i.actFn}()">${i.action} →</span>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+// 待办动作：跳转到对应下钻
+function goSuperseded(){
+  switchView("memory");
+  document.getElementById('type-filter').value = "";
+  filter.type = "";
+  filter.sup = true;
+  document.getElementById('chip-sup').classList.add('active');
+  renderMemory();
+}
+function goEmbed(){
+  // 只读界面不做写操作；提示用户在哪执行
+  alert("在项目目录执行：\npython mem.py embed\n\n（GUI 本期只读，不代跑写操作）");
+}
+
+// 顶部一句话健康判定
+function renderVerdict(){
+  const o = DATA.overview;
+  const st = DATA.status;
+  if(!o || !st) return;
+  const vec = o.vector || {};
+  const vecOn = (vec.indexed || 0) > 0;
+  let dot = "ok", text = "系统运行正常，记忆库健康。", sub = "没有需要你处理的事。";
+  if(!vecOn){
+    dot = "bad";
+    text = "系统可用，但语义检索已失效。";
+    sub = "向量库是空的（0 条已向量化），搜不到语义相近的记忆 —— 需要你跑一次 embed。";
+  } else if(o.superseded > 0){
+    dot = "warn";
+    text = `系统可用，有 ${o.superseded} 条记忆已被取代待清理。`;
+    sub = "其余组件运行正常。";
+  }
+  document.getElementById('verdict').innerHTML = `
+    <span class="vdot ${dot}"></span>
+    <div class="vtext">${text}<div class="vsub">${sub}</div></div>`;
+}
 
 function renderDashboard(){
   const o = DATA.overview;
   if(!o) return;
-  document.getElementById('m-total').textContent = o.total;
-  document.getElementById('m-total-sub').textContent = '3 类 · ' + o.files.store + ' 个文件';
-  document.getElementById('m-semantic').textContent = o.type_count.semantic;
-  document.getElementById('m-procedural').textContent = o.type_count.procedural;
-  document.getElementById('m-episodic').textContent = o.type_count.episodic;
   document.getElementById('s-active').textContent = o.total - o.superseded;
   document.getElementById('s-sup').textContent = o.superseded;
   document.getElementById('s-links').textContent = o.has_provenance;
@@ -332,13 +494,13 @@ function renderDashboard(){
 
   const legend = document.getElementById('donut-legend');
   const parts = [
-    {k:"semantic", n:o.type_count.semantic, c:"#5dc2a0"},
-    {k:"procedural", n:o.type_count.procedural, c:"#7f8de0"},
-    {k:"episodic", n:o.type_count.episodic, c:"#e2a25d"}
+    {k:"语义", n:o.type_count.semantic, c:"#5dc2a0"},
+    {k:"程序", n:o.type_count.procedural, c:"#7f8de0"},
+    {k:"情景", n:o.type_count.episodic, c:"#e2a25d"}
   ];
   legend.innerHTML = parts.map(p=>{
     const pct = o.total ? Math.round(p.n/o.total*100) : 0;
-    return `<div class="row"><span><i style="width:10px;height:10px;border-radius:2px;background:${p.c};display:inline-block;margin-right:8px;vertical-align:0"></i>${p.k}</span><span class="n">${p.n}<span class="p">${pct}%</span></span></div>`;
+    return `<div class="row" style="cursor:pointer" onclick="drillType('${p.k}')"><span><i style="width:10px;height:10px;border-radius:2px;background:${p.c};display:inline-block;margin-right:8px;vertical-align:0"></i>${p.k}</span><span class="n">${p.n}<span class="p">${pct}%</span></span></div>`;
   }).join('');
 
   const cv = document.getElementById('donut');
@@ -363,23 +525,17 @@ function renderDashboard(){
   ctx.fillStyle = "#5c6573";
   ctx.font = "12px -apple-system, sans-serif";
   ctx.fillText("total", cx, cy+18);
+}
 
-  const al = document.getElementById('author-list');
-  const authors = o.authors || [];
-  if(!authors.length){ al.innerHTML = '<div style="color:var(--hint);font-size:12px">无数据</div>'; return; }
-  const max = authors[0].n || 1;
-  al.innerHTML = authors.map(a=>{
-    const w = Math.round(a.n/max*100);
-    return `<div style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-        <span style="color:var(--muted);word-break:break-all">${esc(a.name)}</span>
-        <span style="color:var(--txt);font-weight:500">${a.n}</span>
-      </div>
-      <div style="height:6px;background:var(--panel2);border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${w}%;background:#378add;border-radius:3px"></div>
-      </div>
-    </div>`;
-  }).join('');
+// 类型分布下钻：点某类 → 跳到记忆浏览并过滤该类
+function drillType(zh){
+  const map = {语义:"semantic", 程序:"procedural", 情景:"episodic"};
+  const t = map[zh];
+  if(!t) return;
+  switchView("memory");
+  document.getElementById('type-filter').value = t;
+  filter.type = t;
+  renderMemory();
 }
 
 function renderStatus(){
@@ -422,12 +578,32 @@ function renderStatus(){
 }
 
 let filter = {q:"", type:"", sup:false};
+
+// 记忆卡片 HTML（列表共用）。src: "dash" 首页速览 / "list" 浏览页
+function memCard(m, i, src){
+  const sup = m.superseded_by ? '<span class="badge-sup">已取代</span>' : '';
+  const title = m.abstract || m.name;
+  return `<div class="mem" onclick="openDetail(${i},'${src}')">
+    <div class="top">
+      <span class="tname">${esc(title)}</span>
+      ${sup}
+      <span class="tag ${m.type}">${TYPES[m.type] ? TYPES[m.type].zh : m.type}</span>
+    </div>
+    <div class="techname">${esc(m.name)}</div>
+    <div class="meta">
+      <span>${esc((m.updated||m.created||"").slice(0,10))}</span>
+      <span>${esc(shortAuthor(m.author))}</span>
+      <span>weight ${m.weight}</span>
+    </div>
+  </div>`;
+}
+
 async function renderMemory(){
   const qs = new URLSearchParams();
   if(filter.q) qs.set("q", filter.q);
   if(filter.type) qs.set("type", filter.type);
   if(filter.sup) qs.set("sup", "1");
-  qs.set("limit", "100");
+  qs.set("limit", "200");
   const el = document.getElementById('mem-list');
   const empty = document.getElementById('mem-empty');
   let data;
@@ -441,26 +617,34 @@ async function renderMemory(){
   DATA.memories = data.items;
   if(!data.items.length){ el.innerHTML=""; empty.style.display="block"; empty.textContent="没有匹配的记忆"; return; }
   empty.style.display="none";
-  el.innerHTML = data.items.map((m,i)=>{
-    const sup = m.superseded_by ? '<span class="badge-sup">已取代</span>' : '';
-    return `<div class="mem" onclick="openDetail(${i})">
-      <div class="top">
-        <span class="tname">${esc(m.name)}</span>
-        ${sup}
-        <span class="tag ${m.type}">${m.type}</span>
-      </div>
-      <div class="abstract">${esc(m.abstract)}</div>
-      <div class="meta">
-        <span>weight ${m.weight}</span>
-        <span>${esc(m.author)}</span>
-        <span>${esc((m.updated||m.created||"").slice(0,10))}</span>
-      </div>
-    </div>`;
-  }).join('');
+  el.innerHTML = data.items.map((m,i)=>memCard(m,i,'list')).join('');
 }
 
-async function openDetail(i){
-  const m = DATA.memories[i];
+// 首页记忆速览：展示最近更新的前 6 条，可点开
+async function renderDashMemories(){
+  const qs = new URLSearchParams();
+  if(dashFilter.q) qs.set("q", dashFilter.q);
+  if(dashFilter.type) qs.set("type", dashFilter.type);
+  qs.set("limit", "6");
+  const el = document.getElementById('mem-list-dash');
+  let data;
+  try{
+    data = await api("/api/memories?" + qs.toString());
+  }catch(e){
+    el.innerHTML = '<div class="empty">无法连接后端服务（python mem.py gui）</div>';
+    return;
+  }
+  if(!data.items.length){
+    el.innerHTML = '<div class="empty">没有匹配的记忆</div>';
+    return;
+  }
+  DATA.dashMemories = data.items;
+  el.innerHTML = data.items.map((m,i)=>memCard(m,i,'dash')).join('');
+}
+
+async function openDetail(i, src){
+  const list = src === "dash" ? DATA.dashMemories : DATA.memories;
+  const m = list[i];
   if(!m) return;
   let detail;
   try{
@@ -470,11 +654,24 @@ async function openDetail(i){
   const t = TYPES[meta.type] || {zh:"", color:"#888"};
   const sup = meta.superseded_by ? ' <span class="badge-sup">已被取代</span>' : '';
   const prov = (meta.provenance||[]).join(" | ");
+  // 结论/理由：把"指针式"内容识别出来，明确标注这是一条索引
+  const conclusion = detail.conclusion || "";
+  const reason = detail.reason || "";
+  const isPointer = /见原文|见.*\.md|按.*索引|详见|指.*原文/.test(conclusion + reason);
+  const pointerHint = isPointer ? '<div class="pointer-hint">⚠ 这是一条「索引」记忆，关键内容在别处，需跳转原文查看</div>' : '';
   const body = `
-    <h2>${esc(meta.name)}</h2>
+    <h2>${esc(meta.abstract || meta.name)}</h2>
     <div class="dtag"><span class="tag ${meta.type}">${meta.type} · ${t.zh}</span>${sup}</div>
+    <div class="techname">${esc(meta.name)}</div>
+    ${pointerHint}
+    <h3>结论</h3>
+    <div class="body conclusion">${esc(conclusion)||'<span style="color:var(--hint)">（无）</span>'}</div>
+    <h3>理由</h3>
+    <div class="body">${esc(reason)||'<span style="color:var(--hint)">（无）</span>'}</div>
+    <h3>摘要</h3>
+    <div class="body">${esc(meta.abstract)||"—"}</div>
+    <h3>元数据</h3>
     <div class="kvs">
-      <div class="kv"><span class="k">name</span><span class="v">${esc(meta.name)}</span></div>
       <div class="kv"><span class="k">type</span><span class="v">${esc(meta.type)}</span></div>
       <div class="kv"><span class="k">weight</span><span class="v">${esc(meta.weight)}</span></div>
       <div class="kv"><span class="k">created</span><span class="v">${esc(meta.created)}</span></div>
@@ -485,12 +682,6 @@ async function openDetail(i){
       <div class="kv"><span class="k">author</span><span class="v">${esc(meta.author)}</span></div>
       <div class="kv"><span class="k">provenance</span><span class="v">${esc(prov)||"—"}</span></div>
     </div>
-    <h3>摘要 abstract</h3>
-    <div class="body">${esc(meta.abstract)}</div>
-    <h3>结论</h3>
-    <div class="body">${esc(detail.conclusion)||"—"}</div>
-    <h3>理由</h3>
-    <div class="body">${esc(detail.reason)||"—"}</div>
   `;
   document.getElementById('detail-body').innerHTML = body;
   document.getElementById('detail').classList.add('open');
@@ -548,7 +739,6 @@ function renderHealth(){
       dims.forEach((d,i)=>{ if(d.score!=null) drawRing(document.getElementById('ring-d-'+i), d.score, d.color); });
     }
   };
-  renderCards(document.getElementById('health-cards'), true);
   renderCards(document.getElementById('health-cards-full'), false);
 
   // 问题记忆：从 /api/health 的真实 issues 映射
@@ -570,13 +760,10 @@ function renderHealth(){
           <span class="mv">${esc(r.v)}</span>
         </div>`).join('')}
     </div>`).join('');
-  const overviewList = document.getElementById('diag-list-overview');
   const fullList = document.getElementById('diag-list');
   if(diags.length){
-    overviewList.innerHTML = diagHtml(diags.slice(0,3));
     fullList.innerHTML = diagHtml(diags);
   }else{
-    overviewList.innerHTML = '<div style="color:var(--hint);font-size:12px">无问题记忆，store 健康</div>';
     fullList.innerHTML = '<div style="color:var(--hint);font-size:12px">无问题记忆，store 健康</div>';
   }
 
@@ -603,6 +790,11 @@ document.getElementById('q').addEventListener('input',e=>{filter.q=e.target.valu
 document.getElementById('type-filter').addEventListener('change',e=>{filter.type=e.target.value;renderMemory();});
 document.getElementById('chip-sup').addEventListener('click',function(){this.classList.toggle('active');filter.sup=!filter.sup;renderMemory();});
 
+// 首页速览的搜索/筛选
+let dashFilter = {q:"", type:""};
+document.getElementById('q-dash').addEventListener('input',e=>{dashFilter.q=e.target.value;renderDashMemories();});
+document.getElementById('type-filter-dash').addEventListener('change',e=>{dashFilter.type=e.target.value;renderDashMemories();});
+
 async function boot(){
   try{
     const [ov, st, he] = await Promise.all([
@@ -610,14 +802,17 @@ async function boot(){
     ]);
     DATA.overview = ov; DATA.status = st; DATA.health = he;
   }catch(e){
-    document.getElementById('m-total').textContent = "—";
-    document.getElementById('m-total-sub').textContent = "无法连接后端（python mem.py gui）";
+    document.getElementById('insight-list').innerHTML = '<div class="empty">无法连接后端（python mem.py gui）</div>';
     return;
   }
+  renderVerdict();
+  renderSysStatus();
+  renderInsights();
   renderDashboard();
   renderStatus();
   renderHealth();
   renderMemory();
+  renderDashMemories();
 }
 boot();
 </script>
