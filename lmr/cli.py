@@ -93,6 +93,11 @@ def _build_parser():
     sub.add_parser("serve-shutdown", parents=[common],
                    help="通知常驻召回服务退出（挂 SessionEnd）")
 
+    gui = sub.add_parser("gui", parents=[common],
+                         help="只读 GUI 服务：本地 HTTP 查看记忆大盘/体检/浏览（零新依赖）")
+    gui.add_argument("--host", default="127.0.0.1", help="监听地址（默认 127.0.0.1）")
+    gui.add_argument("--port", type=int, default=8787, help="监听端口（默认 8787）")
+
     distill_cmd = sub.add_parser("distill", parents=[common], help="批量写入候选（原子预校验）")
     distill_cmd.add_argument("--candidates", required=True, help="候选数组的 JSON 文件")
     distill_cmd.add_argument("--source-category", dest="source_category")
@@ -578,6 +583,12 @@ def cmd_serve_shutdown(args):
     return {"shutdown": "requested"}
 
 
+def cmd_gui(args):
+    """只读 GUI 服务：复用 lmr 读真实 store，HTTP 供前端 fetch。"""
+    from . import gui_server
+    return gui_server.serve_gui(host=args.host, port=args.port)
+
+
 HANDLERS = {
     "init": cmd_init,
     "record": cmd_record,
@@ -607,6 +618,7 @@ HANDLERS = {
     "restore": cmd_restore,
     "serve": cmd_serve,
     "serve-shutdown": cmd_serve_shutdown,
+    "gui": cmd_gui,
 }
 
 

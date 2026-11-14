@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS vec (
   dim INTEGER NOT NULL,
   vec BLOB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS access (
+  id TEXT PRIMARY KEY,
+  count INTEGER DEFAULT 0,
+  last_at TEXT DEFAULT ''
+);
 """
 
 
@@ -293,7 +298,36 @@ class Index:
                     "valid_from": row["valid_from"], "invalid_at": row["invalid_at"],
                 })
             results.sort(key=lambda item: (-item["score"], item["id"]))
-            return results[:limit]
+            top = results[:limit]
+            self._record_access(conn, [r["id"] for r in top])
+            conn.commit()
+            return top
+        finally:
+            conn.close()
+
+    def _record_access(self, conn, entry_ids):
+        """把本次召回命中的条目记入访问表（累计次数 + 最近时间）。"""
+        now = datetime.now().astimezone().replace(microsecond=0).isoformat()
+        for entry_id in entry_ids:
+            conn.execute(
+                "INSERT INTO access(id, count, last_at) VALUES (?, 1, ?) "
+                "ON CONFLICT(id) DO UPDATE SET count=count+1, last_at=excluded.last_at",
+                (entry_id, now),
+            )
+
+    def access_stats(self, entry_id=None):
+        """读访问统计：单条或全量（count 降序）。供 GUI 健康页读。"""
+        conn = self._connect()
+        try:
+            if entry_id:
+                row = conn.execute(
+                    "SELECT id, count, last_at FROM access WHERE id=?", (entry_id,)
+                ).fetchone()
+                return dict(row) if row else {"id": entry_id, "count": 0, "last_at": ""}
+            rows = conn.execute(
+                "SELECT id, count, last_at FROM access ORDER BY count DESC"
+            ).fetchall()
+            return [dict(r) for r in rows]
         finally:
             conn.close()
 
