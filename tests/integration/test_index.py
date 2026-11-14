@@ -51,7 +51,7 @@ class TestIndex(MemTestCase):
     def _id(self, name):
         from lmr import schema
 
-        return schema.entry_id(schema.filename_for("decision", name))
+        return schema.entry_id(schema.filename_for("semantic", name))
 
     def test_chinese_short_terms_and_degradation(self):
         # @req 4.3

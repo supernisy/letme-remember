@@ -49,23 +49,22 @@ _PROCESS_MARKERS = (
 # 或类型无法确定。
 _SUPERSEDE_MARKERS = ("取代", "作废", "过时", "推翻", "superseded", "invalid")
 
-# 来源类别 → 默认类型猜测，命中合规边界时归「待裁决」。
+# 来源类别 → 默认类型猜测（对齐 CoALA 三类），命中合规边界时归「待裁决」。
 _CATEGORY_TYPE_HINT = {
-    "profile": "profile",
-    "preference": "preference",
-    "entity": "entity",
-    "event": "event",
-    "decision": "decision",
-    "procedure": "procedure",
-    "fact": "fact",
-    "experience": "experience",
-    "reference": "reference",
-    "rule": "procedure",
-    "rule-file": "procedure",
-    "identity": "profile",
-    "process-doc": "procedure",
-    "job": "experience",
-    "job-review": "reference",
+    "profile": "semantic",
+    "preference": "semantic",
+    "entity": "semantic",
+    "decision": "semantic",
+    "fact": "semantic",
+    "experience": "semantic",
+    "reference": "episodic",
+    "event": "episodic",
+    "rule": "procedural",
+    "rule-file": "procedural",
+    "identity": "semantic",
+    "process-doc": "procedural",
+    "job": "semantic",
+    "job-review": "episodic",
 }
 
 
@@ -131,18 +130,22 @@ def _split_entries(text: str) -> list[str]:
 
 
 def _guess_type(meta: dict, body: str, source_category: str) -> str | None:
-    """猜测类型：优先 frontmatter type，其次来源类别映射，最后正文启发。"""
+    """猜测类型（对齐 CoALA 三类）：优先 frontmatter type（兼容旧名），
+    其次来源类别映射，最后正文启发。"""
     declared = (meta.get("type") or "").strip()
-    if declared and declared in schema.TYPES:
-        return declared
+    if declared:
+        canonical = schema.canonical_type(declared)
+        if canonical:
+            return canonical
     if source_category in _CATEGORY_TYPE_HINT:
         return _CATEGORY_TYPE_HINT[source_category]
-    # 正文出现「教训/症状/原因/修复」→ experience；「选择/决定」→ decision。
+    # 正文出现「教训/症状/原因/修复」→ semantic（可复用教训）；
+    # 「选择/决定」→ semantic（决策结论）。
     lowered = body
     if any(k in lowered for k in ("症状", "原因", "修复", "教训")):
-        return "experience"
+        return "semantic"
     if any(k in lowered for k in ("选择", "决定", "拍板")):
-        return "decision"
+        return "semantic"
     return None
 
 

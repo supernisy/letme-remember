@@ -1,8 +1,12 @@
-"""9 类 typed 记忆、身份键与文件名规则。
+"""typed 记忆（CoALA 三类）与文件名规则。
 
-粒度按类型定义（借鉴 agent-memory 的 schema 机制）：每类声明自己的
-分组键与粒度说明。落盘身份统一用文件头的 name 字段；同类型同 name
-永远落到同一个文件。
+类型对齐 CoALA 认知架构（Princeton, 2023）的长期记忆分类，三类：
+  semantic    语义 —— 稳定事实、偏好、决策结论、教训（可复用，不随时间衰减）
+  episodic    情景 —— 过去发生的事件/复盘索引（指向原文，随时间衰减）
+  procedural  程序 —— 怎么做的流程、规则、做法
+
+落盘粒度：每条记忆以文件头 name 字段独立成文件（放弃按类型分组的
+key_fields 机制），同 name 永远落到同一个文件，便于单条检索与审计。
 """
 
 from __future__ import annotations
@@ -11,28 +15,33 @@ import hashlib
 import re
 
 TYPES = {
-    "profile": {"key_fields": ("user",), "granularity": "一人一文件", "add_only": False},
-    "preference": {"key_fields": ("topic", "subject"), "granularity": "一个稳定偏好一文件", "add_only": False},
-    "entity": {"key_fields": ("category", "subject"), "granularity": "一个实体一文件", "add_only": False},
-    "event": {"key_fields": ("date", "subject"), "granularity": "一事一文件", "add_only": True},
-    "decision": {"key_fields": ("project", "subject"), "granularity": "一个选择及其原因一文件", "add_only": False},
-    "procedure": {"key_fields": ("project", "subject"), "granularity": "一个重复任务的做法一文件", "add_only": False},
-    "fact": {"key_fields": ("project", "subject"), "granularity": "一条稳定事实一文件", "add_only": False},
-    "experience": {"key_fields": ("topic", "subject"), "granularity": "一条教训（症状/原因/修复）一文件", "add_only": False},
-    "reference": {"key_fields": ("source", "subject"), "granularity": "一份外部材料一文件", "add_only": False},
+    "semantic",
+    "episodic",
+    "procedural",
+}
+
+# 旧九类 → CoALA 三类的迁移映射（只作存量迁移与导入猜测的初值，非铁律）。
+# 语义判断仍以蒸馏 prompt 为准；此处仅提供保守默认。
+LEGACY_TYPE_MAP = {
+    "profile": "semantic",
+    "preference": "semantic",
+    "entity": "semantic",
+    "decision": "semantic",
+    "fact": "semantic",
+    "experience": "semantic",
+    "event": "episodic",
+    "reference": "episodic",
+    "procedure": "procedural",
 }
 
 _FORBIDDEN = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
 
-def derive_name(memory_type, key_parts):
-    """按类型声明的分组键拼出身份名，供宿主不必自己造 slug。"""
-    if memory_type not in TYPES:
-        raise ValueError("未知类型: %s" % memory_type)
-    parts = [str(part).strip() for part in key_parts if str(part).strip()]
-    if not parts:
-        raise ValueError("身份键不能为空")
-    return "%s-%s" % (memory_type, "-".join(parts))
+def canonical_type(value):
+    """把旧类型名规范化到三类；已是三类则原样返回，未知返回 None。"""
+    if value in TYPES:
+        return value
+    return LEGACY_TYPE_MAP.get(value)
 
 
 def safe_slug(name):

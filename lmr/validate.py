@@ -42,7 +42,7 @@ def validate_meta(meta, body):
         if not isinstance(value, str) or not value.strip():
             errors.append("必填字段为空: %s" % key)
 
-    if meta["type"] and meta["type"] not in schema.TYPES:
+    if meta["type"] and schema.canonical_type(meta["type"]) is None:
         errors.append("未知类型: %s" % meta["type"])
 
     name = meta["name"]

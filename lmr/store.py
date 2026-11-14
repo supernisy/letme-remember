@@ -17,7 +17,7 @@ from .errors import NotFoundError, ValidationError
 SAMPLE_MEMORY = """---
 name: preference-示例-文本笔记
 abstract: 虚构示例：偏好用纯文本记录笔记
-type: preference
+type: semantic
 created: 2026-01-01T00:00:00+00:00
 updated: 2026-01-01T00:00:00+00:00
 valid_from: 2026-01-01
@@ -67,7 +67,7 @@ def init_data_dir(data_dir, sample=True):
         )
     gitutil.ensure_repo(paths.root)
     if sample and not any(paths.store.glob("*.md")):
-        (paths.store / schema.filename_for("preference", "preference-示例-文本笔记")).write_text(
+        (paths.store / schema.filename_for("semantic", "preference-示例-文本笔记")).write_text(
             SAMPLE_MEMORY, encoding="utf-8"
         )
     idx = index.Index(paths, config.settings_for(paths.root))
@@ -108,10 +108,12 @@ def build_candidate(raw):
 
     name = str(raw.get("name") or "").strip()
     if not name and raw.get("key"):
-        name = schema.derive_name(str(raw.get("type") or ""), [raw.get("key")])
+        name = str(raw.get("key")).strip()
     meta["name"] = name
     meta["abstract"] = str(raw.get("abstract") or "").strip()
-    meta["type"] = str(raw.get("type") or "").strip()
+    raw_type = str(raw.get("type") or "").strip()
+    # 旧类型名规范化为三类；未知类型保留原值，交给 validate 报「未知类型」。
+    meta["type"] = schema.canonical_type(raw_type) if schema.canonical_type(raw_type) else raw_type
     meta["created"] = str(raw.get("created") or now.isoformat()).strip()
     meta["updated"] = now.isoformat()
     meta["weight"] = str(raw.get("weight") if raw.get("weight") is not None else "1.0").strip()

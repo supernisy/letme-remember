@@ -51,7 +51,7 @@ JUDGMENT_PROMPT = """你是记忆仓库的第二审质检员。对下面这条�
   判定口诀：新结论与旧结论「能并存=UPDATE，不能并存=SUPERSEDE」。
 - high_impact: 布尔。是否为高影响/不可逆操作（删除、作废被多处引用的核心结论）。
 - ambiguous: 布尔。候选本身是否歧义或自相矛盾。
-- novel_type: 布尔。类型是否未定义过（type 不在 profile/preference/entity/event/decision/procedure/fact/experience/reference 之内）。
+- novel_type: 布尔。类型是否未定义过（type 不在 semantic/episodic/procedural 三类之内）。
 - compliance: 布尔。是否疑似触碰合规/隐私边界（脚本未拦但可疑）。
 - uncertain: 布尔。候选理由中是否含「可能/也许/例外」等不确定表述。
 - importance: 字符串，low/medium/high 之一。这条结论对用户的重要程度。
@@ -168,14 +168,14 @@ def rule_report(candidate: dict, existing: list[str]) -> dict:
     判断力弱于 LLM，但保证流程照常：
     - conflict：只能靠显式关联字段近似，默认 False；
     - high_impact：仅当操作类型为删除/作废时判 True；
-    - novel_type：靠类型是否在九类之内判断；
+    - novel_type：靠类型是否在 CoALA 三类之内判断；
     - uncertain：靠理由里是否含不确定词判断；
     - 其余维度取保守默认（importance 依 weight 推断，confidence 一律 low）。
     """
     from . import schema as _schema  # 延迟导入，避免循环依赖
 
     valid_types = set(_schema.TYPES)
-    ctype = candidate.get("type", "")
+    ctype = _schema.canonical_type(candidate.get("type", "")) or candidate.get("type", "")
     weight = candidate.get("weight", 0)
     reason = candidate.get("reason", "") or ""
 
