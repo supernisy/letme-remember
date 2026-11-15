@@ -110,7 +110,7 @@
 #### Scenario: 写操作留口不实现
 
 - **WHEN** 用户需要编辑/删除/取代/归档记忆
-- **THEN** 后端 SHALL 不提供写接口；前端写入口 SHALL 置灰，仅架构上预留
+- **THEN** 后端 SHALL 不提供写接口；Web 界面写入口 SHALL 置灰，仅架构上预留
 
 ### Requirement: 敏感信息不泄露
 

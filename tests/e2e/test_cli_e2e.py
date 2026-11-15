@@ -30,6 +30,8 @@ class TestCliE2E(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.env = os.environ.copy()
         self.env["LMR_DATA_DIR"] = self.tmp.name
+        # 隔离铁律：禁用 embedding，避免 setUp 的 init 每次冷加载模型（13-15s）拖慢测试。
+        self.env["LMR_DISABLE_EMBEDDING"] = "1"
         init = self.run_mem("init")
         self.assertEqual(init.returncode, 0, init.stderr)
 

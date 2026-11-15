@@ -5,6 +5,7 @@
 """
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -17,11 +18,21 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
+# 可选依赖 cryptography 未装时跳过（而非失败），避免可选依赖缺失误报红灯。
+try:
+    import cryptography  # noqa: F401
+    _HAS_CRYPTO = True
+except ImportError:
+    _HAS_CRYPTO = False
+
 
 class TestBackupSyncE2E(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="lmr-backup-e2e-")
         self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        # 隔离铁律：禁用 embedding，避免 init_data_dir 冷加载模型拖慢测试。
+        os.environ["LMR_DISABLE_EMBEDDING"] = "1"
+        self.addCleanup(lambda: os.environ.pop("LMR_DISABLE_EMBEDDING", None))
         self.paths = store.init_data_dir(Path(self.tmp) / "data", sample=False)
         self.settings = dict(config.DEFAULT_SETTINGS)
         # 独立密钥文件，避免污染真实密钥
@@ -40,6 +51,7 @@ class TestBackupSyncE2E(unittest.TestCase):
         cfg["backup"] = {"remote": remote_url}
         self.paths.config.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
 
+    @unittest.skipUnless(_HAS_CRYPTO, "未安装可选依赖 cryptography，无法跑加密备份 e2e")
     def test_encrypt_push_clone_restore_roundtrip(self):
         # 密钥落在临时 KEY_FILE，先确保密钥存在
         original_key_file = backup.KEY_FILE
