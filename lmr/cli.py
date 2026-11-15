@@ -18,6 +18,7 @@ from . import llm as llm_module
 from . import judgment
 from . import host as host_module
 from . import backup as backup_module
+from . import incremental as incremental_module
 from .errors import EXIT_INTERNAL, EXIT_OK, EXIT_VALIDATION, MemError, NotFoundError, ValidationError
 
 CANDIDATE_FIELDS = (
@@ -120,6 +121,17 @@ def _build_parser():
     batch_cmd = sub.add_parser("batch-distill", parents=[common], help="用 LLM 批量蒸馏旧记忆文本")
     batch_cmd.add_argument("--file", required=True, help="待蒸馏的文本文件")
     batch_cmd.add_argument("--dry-run", dest="dry_run", action="store_true", help="只产出候选 JSON，不落库")
+
+    chunk_cmd = sub.add_parser(
+        "distill-chunk", parents=[common],
+        help="超长文本分块蒸馏（Map-Reduce）：按说话人轮次分块 → 每块提炼 → 合并去重")
+    chunk_cmd.add_argument("--file", required=True, help="待蒸馏的长文本/转写文件")
+    chunk_cmd.add_argument("--max-chars", dest="max_chars", type=int, default=None,
+                           help="单块字符上限（默认 6000）")
+    chunk_cmd.add_argument("--dry-run", dest="dry_run", action="store_true",
+                           help="只产出候选 JSON，不落库")
+    chunk_cmd.add_argument("--diff-against", dest="diff_against", default=None,
+                           help="上一版候选 JSON 文件路径，用于结论级增量 diff（输出本次新增/深化清单）")
 
     prep_cmd = sub.add_parser(
         "import-preprocess", parents=[common],
@@ -447,6 +459,42 @@ def cmd_batch_distill(args):
     return distill.run_candidates(candidates, paths, settings)
 
 
+def cmd_distill_chunk(args):
+    """超长文本分块蒸馏：分块 → 每块提炼 → 合并去重；可选增量 diff。"""
+    paths, settings = _paths(args)
+    data_config = config._data_config(paths.root)
+    text = Path(args.file).read_text(encoding="utf-8")
+    client = llm_module.make_client(settings, data_config)
+
+    result = incremental_module.distill_chunked(client, text, max_chars=args.max_chars)
+    merged = result["merged"]
+    output = {
+        "chunks": result["chunks"],
+        "raw_candidates": len(result["candidates"]),
+        "merged_candidates": len(merged),
+    }
+
+    # 结论级增量 diff：对比上一版候选，产出本次新增/深化清单。
+    if args.diff_against:
+        prev = _json_file(args.diff_against, list)
+        prev_lines = []
+        for p in prev:
+            if isinstance(p, dict):
+                prev_lines.append("%s | %s" % (
+                    str(p.get("name") or "").strip(), str(p.get("abstract") or "").strip()))
+            else:
+                prev_lines.append(str(p))
+        output["diff"] = incremental_module.diff_conclusions(client, prev_lines, merged)
+
+    if args.dry_run:
+        output["candidates"] = merged
+        return output
+
+    outcome = distill.run_candidates(merged, paths, settings)
+    output["outcome"] = outcome
+    return output
+
+
 def cmd_import_preprocess(args):
     """只读预处理：扫描源文件，产出候选卡片（staging）+ 脱敏报告。
 
@@ -603,6 +651,7 @@ HANDLERS = {
     "judge": cmd_judge,
     "consolidate": cmd_consolidate,
     "batch-distill": cmd_batch_distill,
+    "distill-chunk": cmd_distill_chunk,
     "import-preprocess": cmd_import_preprocess,
     "propose": cmd_propose,
     "apply": cmd_apply,
