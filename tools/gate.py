@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""准出闸门：失败即关闭（fail-closed）的轻量 SpecGate。
+"""准出闸门（Gate）：失败即关闭（fail-closed）的实现后硬门禁。
 
 用途：在「实现完成 -> 归档」之间加一道脚本硬门禁，不靠人记得检查。
 OpenSpec 自带的 validate 只校验规范文件的结构，不检查代码是否兑现场景；
@@ -46,7 +46,7 @@ def _resolve_change_path(*parts):
 TASKS = _resolve_change_path("tasks.md")
 CHANGE_SPECS = _resolve_change_path("specs")
 PROPOSAL = _resolve_change_path("proposal.md")
-SIGNOFF = ROOT / "docs" / "spec-gate" / "signoff.json"
+SIGNOFF = ROOT / "docs" / "gate-signoff" / "signoff.json"
 
 SENSITIVE_WORDS = re.compile(r"薪资|职业定位|谈判口径|全栈|前端岗|月薪")
 SECRET_SHAPES = re.compile(
@@ -255,7 +255,7 @@ CHECKS = [
 
 
 def main():
-    parser = argparse.ArgumentParser(description="准出闸门（轻量 SpecGate）")
+    parser = argparse.ArgumentParser(description="准出闸门（Gate，实现后硬门禁）")
     parser.add_argument("--shadow", action="store_true", help="影子模式：报告但不拦截")
     sub = parser.add_subparsers(dest="action")
     sign_cmd = sub.add_parser("sign", help="固化一次人工批准")
