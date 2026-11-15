@@ -27,11 +27,13 @@ import socket
 import sys
 import threading
 import time
+from pathlib import Path
 
 HOST = "127.0.0.1"
 PORT = 7867
-# 无请求多少秒后自动退出（默认 30 分钟）。
-IDLE_TIMEOUT = float(os.environ.get("LMR_SERVE_IDLE_TIMEOUT", "1800"))
+# 无请求多少秒后自动退出（默认 2 小时）。
+# 2026-11-15 从 30 分钟调到 2 小时：减少空闲自退导致 GUI 服务状态灯频繁变红的频率。
+IDLE_TIMEOUT = float(os.environ.get("LMR_SERVE_IDLE_TIMEOUT", "7200"))
 
 
 def _offline_env():
@@ -115,6 +117,29 @@ def _send(conn, obj):
     conn.sendall((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"))
 
 
+STATE_FILE = ".index/serve.state"
+
+
+def _write_state(paths, state):
+    """把 serve 退出状态写到状态文件，供 GUI 区分「空闲自退」与「异常」。"""
+    try:
+        f = paths.root / ".index" / "serve.state"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(state + "\n", encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def serve_state(data_dir=None):
+    """读取 serve 状态文件；无文件返回 None。供 GUI 三态判断。"""
+    from . import config
+    root = Path(data_dir) if data_dir else Path(config.resolve_data_dir())
+    f = root / ".index" / "serve.state"
+    if f.is_file():
+        return f.read_text(encoding="utf-8", errors="ignore").strip() or None
+    return None
+
+
 def serve_forever():
     """主循环：监听端口，串行处理请求，空闲超时自退。"""
     # 端口锁：已有实例在跑则静默退出（重复拉起不报错、不冲突）。
@@ -128,6 +153,8 @@ def serve_forever():
     print("[serve] 模型就绪，耗时 %.1f 秒，监听 %s:%d" % (time.time() - t0, HOST, PORT),
           file=sys.stderr)
 
+    _write_state(paths, "running")
+
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind((HOST, PORT))
@@ -136,6 +163,7 @@ def serve_forever():
 
     last_active = time.time()
     shutdown = False
+    exit_state = "crashed"  # 默认视为异常；正常路径会覆盖
     try:
         while not shutdown:
             try:
@@ -144,18 +172,21 @@ def serve_forever():
                 # 空闲自退：长时间无请求则退出，避免残留僵尸进程。
                 if time.time() - last_active > IDLE_TIMEOUT:
                     print("[serve] 空闲超时，自动退出", file=sys.stderr)
+                    exit_state = "idle-exit"
                     break
                 continue
             last_active = time.time()
             try:
                 result = _handle(conn, eng, paths, settings)
                 if result == "shutdown":
+                    exit_state = "shutdown"
                     shutdown = True
             finally:
                 conn.close()
     finally:
         srv.close()
-        print("[serve] 服务已退出", file=sys.stderr)
+        _write_state(paths, exit_state)
+        print("[serve] 服务已退出（%s）" % exit_state, file=sys.stderr)
     return 0
 
 

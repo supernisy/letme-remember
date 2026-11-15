@@ -121,15 +121,22 @@ def _access_stats():
 
 
 def _serve_status():
-    """常驻召回服务（127.0.0.1:7867）是否在跑。"""
+    """常驻召回服务三态：running / idle（空闲自退，正常）/ error（异常）。"""
     import socket
+    from . import serve as serve_module
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(0.5)
     try:
         running = s.connect_ex(("127.0.0.1", 7867)) == 0
     finally:
         s.close()
-    return running
+    if running:
+        return "running"
+    # 端口连不上：看状态文件区分「空闲自退/正常关闭」vs「异常（从未启动或崩溃）」
+    state = serve_module.serve_state()
+    if state in ("idle-exit", "shutdown"):
+        return "idle"
+    return "error"
 
 
 def _audit_recent(paths, n=50):
@@ -186,7 +193,7 @@ def _overview():
         "authors": [{"name": k, "n": v} for k, v in author_list],
         "vector": vec,
         "embedding": embed,
-        "serve_running": serve,
+        "serve_state": serve,
         "health": health,
     }
 
@@ -242,29 +249,55 @@ def _health_dimensions(memories, vec, access):
 
 
 def _health_issues():
-    """问题记忆诊断：找出新鲜度过期、被取代、来源缺失的条目。"""
+    """问题记忆诊断：找出新鲜度过期、被取代、来源缺失的条目。
+
+    每条附三根真实诊断指标：
+    - access：访问次数 + 最近召回时间（access 表）
+    - stale：valid_from 距今天数（是否过新鲜期）
+    - provenance：来源链是否完整
+    """
     memories = _read_memories()
     settings = config.settings_for(_data_dir())
     half_life = float(settings.get("recency_half_life_days", 90.0))
     today = date.today()
+    # 读 access 表，建 id -> {count, last_at} 映射
+    from . import index as index_module
+    paths = _paths()
+    access_map = {}
+    try:
+        if _index_exists(paths):
+            idx = index_module.Index(paths, settings)
+            for a in idx.access_stats():
+                access_map[a.get("id")] = a
+    except Exception:
+        pass
     issues = []
     for m in memories:
         flags = []
         if m.get("superseded_by"):
             flags.append("conflict")
+        stale_days = None
         if m.get("valid_from"):
             try:
                 d = datetime.fromisoformat(str(m["valid_from"]).replace("Z", "+00:00")).date()
-                if (today - d).days > half_life:
+                stale_days = (today - d).days
+                if stale_days > half_life:
                     flags.append("stale")
             except ValueError:
                 pass
         if not m.get("provenance"):
             flags.append("nosrc")
         if flags:
-            issues.append({"id": m["id"], "name": m.get("name") or m["id"],
-                           "type": m.get("type"), "abstract": m.get("abstract"),
-                           "flags": flags})
+            acc = access_map.get(m["id"], {"count": 0, "last_at": ""})
+            issues.append({
+                "id": m["id"], "name": m.get("name") or m["id"],
+                "type": m.get("type"), "abstract": m.get("abstract"),
+                "flags": flags,
+                "access_count": acc.get("count", 0),
+                "last_accessed": acc.get("last_at", ""),
+                "stale_days": stale_days,
+                "has_provenance": bool(m.get("provenance")),
+            })
     order = {"conflict": 0, "stale": 1, "nosrc": 2}
     issues.sort(key=lambda x: min(order.get(f, 9) for f in x["flags"]))
     return issues
@@ -343,7 +376,7 @@ class _Handler(BaseHTTPRequestHandler):
             elif path == "/api/status":
                 paths = _paths()
                 self._send({
-                    "serve_running": _serve_status(),
+                    "serve_state": _serve_status(),
                     "embedding": _embedding_status(),
                     "vector": _vec_stats(paths),
                     "data_dir": str(_data_dir()),

@@ -155,6 +155,8 @@
 
   .diag-list{display:flex; flex-direction:column; gap:10px;}
   .diag{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px;}
+  .diag.clickable{cursor:pointer; transition:border-color .15s, background .15s;}
+  .diag.clickable:hover{border-color:var(--green); background:var(--panel2);}
   .diag .dtop{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
   .diag .dname{font-weight:500; font-size:13px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .diag .dissue{font-size:11px; padding:2px 9px; border-radius:12px; flex-shrink:0;}
@@ -372,10 +374,18 @@ function renderSysStatus(){
   const vec = st.vector || {};
   const emb = st.embedding || {};
   const vecOn = (vec.indexed || 0) > 0;
+  // serve 三态：running(绿) / idle(黄，空闲自退，正常) / error(红，未运行或异常)
+  const serveState = st.serve_state || "error";
+  const serveMap = {
+    running: {light:"ok", desc:"常驻运行中，模型常驻、检索毫秒级"},
+    idle:    {light:"warn", desc:"空闲自退（正常）——超过 2 小时无请求自动退出，下次检索会自动拉起"},
+    error:   {light:"off", desc:"未运行。新会话启动会自动拉起；也可手动 python mem.py serve"}
+  };
+  const serveInfo = serveMap[serveState] || serveMap.error;
   const cards = [
-    {light: st.serve_running ? "ok":"off",
+    {light: serveInfo.light,
      name:"召回服务 serve",
-     desc: st.serve_running ? "常驻运行中，模型常驻、检索毫秒级" : "未运行。当前每次检索都要重新加载模型，慢。"},
+     desc: serveInfo.desc},
     {light: vecOn ? "ok":"warn",
      name:"向量库",
      desc: vecOn ? `已向量化 ${vec.indexed} 条 · ${vec.dim||"?"} 维` : `已向量化 0 条，语义检索没生效（跑 embed 补建）`},
@@ -544,8 +554,15 @@ function renderStatus(){
   const vec = s.vector || {};
   const emb = s.embedding || {};
   const vecOn = (vec.indexed || 0) > 0;
+  const serveState = s.serve_state || "error";
+  const serveMap = {
+    running: {on:"on", v:"运行中 · 127.0.0.1:7867"},
+    idle:    {on:"warn", v:"空闲自退（正常）· 超过 2 小时无请求自动退出"},
+    error:   {on:"off", v:"未运行 · 新会话启动会自动拉起"}
+  };
+  const sv = serveMap[serveState] || serveMap.error;
   const health = [
-    {on: s.serve_running ? "on":"off", k:"召回服务 serve", v: s.serve_running ? "运行中 · 127.0.0.1:7867" : "未运行"},
+    {on: sv.on, k:"召回服务 serve", v: sv.v},
     {on: vecOn ? "on":"warn", k:"向量库", v: vecOn ? `已向量化 · ${vec.dim||"?"} 维 · ${vec.indexed} 条` : "未向量化（跑 embed 命令补建）"},
     {on: emb.enabled ? "on":"off", k:"embedding 模型", v: emb.enabled ? emb.model : "已禁用"},
     {on:"warn", k:"importance 评分字段", v:"缺失 · 全部记忆无此字段"},
@@ -650,6 +667,19 @@ async function openDetail(i, src){
   try{
     detail = await api("/api/memory/" + encodeURIComponent(m.id));
   }catch(e){ return; }
+  renderDetailInto(detail);
+}
+
+// 体检页诊断条点击下钻：直接用 id 拉详情
+async function openDetailById(id){
+  let detail;
+  try{
+    detail = await api("/api/memory/" + encodeURIComponent(id));
+  }catch(e){ return; }
+  renderDetailInto(detail);
+}
+
+function renderDetailInto(detail){
   const meta = detail.meta || {};
   const t = TYPES[meta.type] || {zh:"", color:"#888"};
   const sup = meta.superseded_by ? ' <span class="badge-sup">已被取代</span>' : '';
@@ -659,6 +689,55 @@ async function openDetail(i, src){
   const reason = detail.reason || "";
   const isPointer = /见原文|见.*\.md|按.*索引|详见|指.*原文/.test(conclusion + reason);
   const pointerHint = isPointer ? '<div class="pointer-hint">⚠ 这是一条「索引」记忆，关键内容在别处，需跳转原文查看</div>' : '';
+
+  // 健康指标：访问热度 / 新鲜度 / 来源链（真实数据）
+  const acc = detail.access || {count:0, last_at:""};
+  let accPct, accCls, accV;
+  if(acc.count > 0){
+    accPct = Math.min(100, 30 + acc.count * 15); accCls = "green";
+    accV = `召回 ${acc.count} 次${acc.last_at ? " · " + esc(acc.last_at.slice(0,10)) : ""}`;
+  }else{
+    accPct = 5; accCls = "red"; accV = "从未被召回";
+  }
+  // 新鲜度
+  let freshPct, freshCls, freshV;
+  const vf = meta.valid_from;
+  if(!vf){
+    freshPct = 50; freshCls = "gray"; freshV = "无 valid_from，无法判断";
+  }else{
+    try{
+      const days = Math.floor((Date.now() - new Date(vf).getTime()) / 86400000);
+      if(days <= 30){ freshPct=90; freshCls="green"; freshV=`${days} 天前，新鲜`; }
+      else if(days <= 90){ freshPct=55; freshCls="amber"; freshV=`${days} 天前，偏旧`; }
+      else{ freshPct=25; freshCls="red"; freshV=`${days} 天前，已过新鲜期`; }
+    }catch(e){ freshPct=50; freshCls="gray"; freshV="valid_from 格式异常"; }
+  }
+  // 来源链
+  const hasProv = !!(meta.provenance && meta.provenance.length);
+  const srcPct = hasProv ? 85 : 15;
+  const srcCls = hasProv ? "green" : "red";
+  const srcV = hasProv ? "provenance ✓" : "provenance 缺失（不可追责）";
+
+  const healthBlock = `
+    <h3>健康指标</h3>
+    <div class="diag" style="margin:0">
+      <div class="metric-row">
+        <span class="mk">访问热度</span>
+        <div class="bar ${accCls}"><div style="width:${accPct}%"></div></div>
+        <span class="mv">${accV}</span>
+      </div>
+      <div class="metric-row">
+        <span class="mk">新鲜度</span>
+        <div class="bar ${freshCls}"><div style="width:${freshPct}%"></div></div>
+        <span class="mv">${freshV}</span>
+      </div>
+      <div class="metric-row">
+        <span class="mk">来源链</span>
+        <div class="bar ${srcCls}"><div style="width:${srcPct}%"></div></div>
+        <span class="mv">${srcV}</span>
+      </div>
+    </div>`;
+
   const body = `
     <h2>${esc(meta.abstract || meta.name)}</h2>
     <div class="dtag"><span class="tag ${meta.type}">${meta.type} · ${t.zh}</span>${sup}</div>
@@ -668,6 +747,7 @@ async function openDetail(i, src){
     <div class="body conclusion">${esc(conclusion)||'<span style="color:var(--hint)">（无）</span>'}</div>
     <h3>理由</h3>
     <div class="body">${esc(reason)||'<span style="color:var(--hint)">（无）</span>'}</div>
+    ${healthBlock}
     <h3>摘要</h3>
     <div class="body">${esc(meta.abstract)||"—"}</div>
     <h3>元数据</h3>
@@ -741,17 +821,41 @@ function renderHealth(){
   };
   renderCards(document.getElementById('health-cards-full'), false);
 
-  // 问题记忆：从 /api/health 的真实 issues 映射
+  // 问题记忆：从 /api/health 的真实 issues 映射，三根真实诊断条
   const FLAG = {conflict:{t:"已被取代",cls:"conflict"}, stale:{t:"陈旧候选",cls:"stale"}, nosrc:{t:"来源断链",cls:"nosrc"}};
   const diags = issues.map(it=>{
     const f = it.flags && it.flags[0] ? (FLAG[it.flags[0]] || {t:it.flags[0],cls:"cold"}) : {t:"—",cls:"cold"};
-    return {name:it.name, issue:f.cls, issueTxt:f.t, rows:[
-      {k:"类型", v: it.type || "—", pct: it.type? 60:0, cls:"gray"},
-      {k:"问题标记", v: (it.flags||[]).join(", "), pct: 40, cls:"amber"}
+    // 1) 访问热度：有 access_count 就亮，0 则红（从未被召回）
+    let accPct, accCls, accV;
+    if(it.access_count > 0){
+      accPct = Math.min(100, 30 + it.access_count * 15); accCls = "green";
+      accV = `召回 ${it.access_count} 次${it.last_accessed ? " · " + esc(it.last_accessed.slice(0,10)) : ""}`;
+    }else{
+      accPct = 5; accCls = "red"; accV = "从未被召回";
+    }
+    // 2) 新鲜度：stale_days 越大越旧
+    let freshPct, freshCls, freshV;
+    if(it.stale_days == null){
+      freshPct = 50; freshCls = "gray"; freshV = "无 valid_from，无法判断";
+    }else if(it.stale_days <= 30){
+      freshPct = 90; freshCls = "green"; freshV = `${it.stale_days} 天前，新鲜`;
+    }else if(it.stale_days <= 90){
+      freshPct = 55; freshCls = "amber"; freshV = `${it.stale_days} 天前，偏旧`;
+    }else{
+      freshPct = 25; freshCls = "red"; freshV = `${it.stale_days} 天前，已过新鲜期`;
+    }
+    // 3) 来源链
+    const srcPct = it.has_provenance ? 85 : 15;
+    const srcCls = it.has_provenance ? "green" : "red";
+    const srcV = it.has_provenance ? "provenance ✓" : "provenance 缺失（不可追责）";
+    return {id:it.id, name:it.abstract || it.name, issue:f.cls, issueTxt:f.t, rows:[
+      {k:"访问热度", v: accV, pct: accPct, cls: accCls},
+      {k:"新鲜度", v: freshV, pct: freshPct, cls: freshCls},
+      {k:"来源链", v: srcV, pct: srcPct, cls: srcCls}
     ]};
   });
   const diagHtml = list => list.map(d=>`
-    <div class="diag">
+    <div class="diag clickable" onclick="openDetailById('${esc(d.id)}')" title="点击查看详情">
       <div class="dtop"><span class="dname">${esc(d.name)}</span><span class="dissue ${d.issue}">${d.issueTxt}</span></div>
       ${d.rows.map(r=>`
         <div class="metric-row">
