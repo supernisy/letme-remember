@@ -7,12 +7,6 @@ const loading = ref(true)
 const error = ref('')
 const data = ref<Overview | null>(null)
 
-const typeColors: Record<string, string> = {
-  semantic: 'var(--type-semantic)',
-  episodic: 'var(--type-episodic)',
-  procedural: 'var(--type-procedural)',
-}
-
 const typeLabels: Record<string, string> = {
   semantic: '语义记忆',
   episodic: '情景记忆',
@@ -67,7 +61,6 @@ onMounted(async () => {
         <h2 class="section-title">记忆类型分布</h2>
         <div class="type-grid">
           <div v-for="(label, t) in typeLabels" :key="t" class="type-card">
-            <span class="tdot" :style="{ background: typeColors[t] }"></span>
             <span class="tname">{{ label }}</span>
             <span class="tnum">{{ data.type_count[t] ?? 0 }}</span>
           </div>
@@ -172,12 +165,6 @@ onMounted(async () => {
   padding: 12px;
   background: var(--surface-panel-2);
   border-radius: var(--radius-sm);
-}
-.tdot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 .tname {
   color: var(--content-secondary);

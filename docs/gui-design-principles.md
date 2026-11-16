@@ -44,7 +44,8 @@ GUI 是 `lmr` 的一层薄壳：`config.Paths` 定位数据、`frontmatter` 解�
 ### 5. 浅色主题对齐 IDE + 语义令牌
 
 - v2 起 GUI 用**浅色主题**（旧版深色 `#0f1115` 与 IDE light 主题割裂，已废弃）。
-- 颜色不硬编码，走 `gui/src/styles/tokens.css` 语义令牌：类型三色（semantic/episodic/procedural）、状态色（红/绿/琥珀）、文字/表面色阶。
+- 颜色不硬编码，走 `gui/src/styles/tokens.css` 语义令牌：状态色（红/绿/琥珀）、文字/表面色阶。
+- **圆点只表达真状态**（总览健康判定、系统启停）。记忆类型不用彩色圆点——圆点容易被误读成「状态有问题」，且多类型多色造成混淆；类型统一用中文文字标签 `.ttag`（语义记忆/情景记忆/程序记忆），浏览与体检两视图标签样式和位置一致。类型三色令牌在 tokens.css 保留作概念锚点，但界面不引用。
 - 无障碍基线：可见 `:focus`、`aria` 语义（tab 导航用 `role=tab` + `aria-selected`）、`prefers-reduced-motion` 降级、响应式断点。
 
 ## 验收体系（OpenSpec 完整模式，用户拍板必走）

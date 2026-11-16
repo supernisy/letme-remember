@@ -8,10 +8,10 @@ import HealthView from './views/HealthView.vue'
 type ViewKey = 'overview' | 'status' | 'browse' | 'health'
 
 const nav = [
-  { key: 'overview' as ViewKey, label: '总览', dot: 'var(--action-primary)' },
-  { key: 'status' as ViewKey, label: '系统状态', dot: 'var(--type-procedural)' },
-  { key: 'browse' as ViewKey, label: '记忆浏览', dot: 'var(--type-semantic)' },
-  { key: 'health' as ViewKey, label: '记忆体检', dot: 'var(--type-episodic)' },
+  { key: 'overview' as ViewKey, label: '总览' },
+  { key: 'status' as ViewKey, label: '系统状态' },
+  { key: 'browse' as ViewKey, label: '记忆浏览' },
+  { key: 'health' as ViewKey, label: '记忆体检' },
 ]
 
 const active = ref<ViewKey>('overview')
@@ -34,7 +34,7 @@ const active = ref<ViewKey>('overview')
           :aria-selected="active === item.key"
           @click.prevent="active = item.key"
         >
-          <span class="dot" :style="{ background: item.dot }"></span>{{ item.label }}
+          {{ item.label }}
         </a>
       </nav>
       <div class="sidebar-foot">
@@ -106,15 +106,6 @@ const active = ref<ViewKey>('overview')
   color: var(--content-primary);
   font-weight: 500;
 }
-.nav .dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 8px;
-  vertical-align: 1px;
-}
-
 .sidebar-foot {
   margin-top: auto;
   padding: 16px 10px 0;

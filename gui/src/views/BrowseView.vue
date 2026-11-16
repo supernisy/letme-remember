@@ -17,10 +17,10 @@ const pageSize = 20
 const detail = ref<MemoryDetail | null>(null)
 const detailLoading = ref(false)
 
-const typeColors: Record<string, string> = {
-  semantic: 'var(--type-semantic)',
-  episodic: 'var(--type-episodic)',
-  procedural: 'var(--type-procedural)',
+const typeLabels: Record<string, string> = {
+  semantic: '语义记忆',
+  episodic: '情景记忆',
+  procedural: '程序记忆',
 }
 
 async function load() {
@@ -99,7 +99,7 @@ onMounted(load)
     <ul v-else class="mem-list" aria-label="记忆列表">
       <li v-for="m in items" :key="m.id" class="mem">
         <button class="mem-main" @click="openDetail(m.id)">
-          <span class="mdot" :style="{ background: typeColors[m.type] }"></span>
+          <span class="ttag">{{ typeLabels[m.type] ?? m.type }}</span>
           <span class="tname">{{ m.name || m.id }}</span>
           <span class="mmeta">boost {{ m.boost }}</span>
         </button>
@@ -225,12 +225,6 @@ onMounted(load)
   text-align: left;
   font: inherit;
   color: var(--content-primary);
-}
-.mdot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 .tname {
   font-weight: 500;

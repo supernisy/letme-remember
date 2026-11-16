@@ -20,6 +20,21 @@ body {
   min-height: 100vh;
 }
 
+/* —— 记忆类型标签（浏览/体检共用）——
+ * 类型用「中文文字标签」表达，不用彩色圆点。
+ * 圆点在本 GUI 中只保留给真状态（总览健康判定、系统启停），
+ * 避免把类型色点误读成“状态有问题”。 */
+.ttag {
+  font-size: 11px;
+  color: var(--content-secondary);
+  background: var(--surface-panel-2);
+  border: 1px solid var(--border-base);
+  padding: 2px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* —— 可见焦点（WCAG 2.2 AA：键盘用户必须能看到焦点） —— */
 :focus-visible {
   outline: 2px solid var(--focus-ring);

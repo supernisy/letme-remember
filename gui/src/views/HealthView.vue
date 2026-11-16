@@ -7,6 +7,12 @@ const loading = ref(true)
 const error = ref('')
 const issues = ref<HealthIssue[]>([])
 
+const typeLabels: Record<string, string> = {
+  semantic: '语义记忆',
+  episodic: '情景记忆',
+  procedural: '程序记忆',
+}
+
 const flagLabels: Record<string, string> = {
   conflict: '冲突（已被取代）',
   stale: '过期',
@@ -47,8 +53,8 @@ onMounted(async () => {
     <ul v-else class="diag-list" aria-label="问题记忆列表">
       <li v-for="iss in issues" :key="iss.id" class="diag">
         <div class="dhead">
+          <span class="ttag">{{ typeLabels[iss.type] ?? iss.type }}</span>
           <span class="dname">{{ iss.name }}</span>
-          <span class="dtype">{{ iss.type }}</span>
         </div>
         <div class="flags">
           <span
@@ -122,14 +128,6 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.dtype {
-  font-size: 11px;
-  color: var(--content-secondary);
-  background: var(--surface-panel-2);
-  padding: 2px 8px;
-  border-radius: 6px;
-  flex-shrink: 0;
 }
 .flags {
   display: flex;
