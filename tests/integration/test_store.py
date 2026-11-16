@@ -138,7 +138,7 @@ class TestWriteChain(MemTestCase):
         batch = proposal.create_batch(self.paths, items)
         self.assertEqual(batch["created"], proposal.MAX_PER_BATCH["delete"])
         self.assertEqual(batch["truncated"], 6 - proposal.MAX_PER_BATCH["delete"])
-        self.assertIn("deterministic", proposal.classify("adjust_weight"))
+        self.assertIn("deterministic", proposal.classify("adjust_boost"))
         self.assertEqual(proposal.classify("unknown_op"), "unknown")
 
     def test_import_batch_undo(self):

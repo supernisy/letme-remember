@@ -32,7 +32,7 @@
   - type（类型）
   - created / updated（写入时间）
   - author（谁写的，标注宿主来源）
-  - weight（权重，表示重要程度）
+  - boost（排序乘数，检索时抬升这条排多靠前，范围 0~10；旧名 weight，见 concept-glossary.md）
   - links（显式关联，指向其他记忆，做轻量关系）
   - provenance（来源追溯）
   - body（正文，完整结论 + 理由）

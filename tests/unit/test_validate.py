@@ -47,9 +47,9 @@ class TestValidate(unittest.TestCase):
         # 被取代但未失效（有新版、旧版仍有效、只是被压一头）应合法，检索时降权而非排除。
         self.assertEqual(errors_for(superseded_by="另一条"), [])
 
-    def test_weight_out_of_range(self):
+    def test_boost_out_of_range(self):
         # @req 2.2
-        self.assertTrue(any("weight" in item for item in errors_for(weight="99")))
+        self.assertTrue(any("boost" in item for item in errors_for(boost="99")))
 
     def test_unknown_type(self):
         # @req 2.2

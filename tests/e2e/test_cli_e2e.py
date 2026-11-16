@@ -125,7 +125,7 @@ class TestCliE2E(unittest.TestCase):
         src.write_text(
             "---\nname: preference-笔记\nabstract: 偏好纯文本\ntype: preference\n"
             "created: 2026-01-01T00:00:00+00:00\nupdated: 2026-01-01T00:00:00+00:00\n"
-            "valid_from: 2026-01-01\ninvalid_at:\nsuperseded_by:\nweight: 1.0\n"
+            "valid_from: 2026-01-01\ninvalid_at:\nsuperseded_by:\nboost: 1.0\n"
             "author: human\nlinks:\nprovenance:\n---\n\n## 结论\n\n偏好用纯文本。\n\n"
             "## 理由\n\n便于检索。\n",
             encoding="utf-8",

@@ -70,12 +70,12 @@ def validate_meta(meta, body):
     # 区间自洽检查（invalid_at 不早于 valid_from）已在上方第 63-65 行统一处理。
 
     try:
-        weight = float(meta["weight"])
+        boost = float(meta["boost"])
     except (TypeError, ValueError):
-        errors.append("weight 不是数值")
+        errors.append("boost 不是数值")
     else:
-        if not (0.0 <= weight <= 10.0):
-            errors.append("weight 超出范围 [0, 10]")
+        if not (0.0 <= boost <= 10.0):
+            errors.append("boost 超出范围 [0, 10]")
 
     sections = frontmatter.body_sections(body)
     if not sections["结论"]:

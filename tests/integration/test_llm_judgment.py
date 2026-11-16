@@ -30,17 +30,17 @@ class TestSupersedePrompt(unittest.TestCase):
 
 class TestParseReport(unittest.TestCase):
     def test_parse_clean_json(self):
-        raw = '{"conflict": true, "importance": "high", "confidence": "high", "missing": ""}'
+        raw = '{"conflict": true, "gate_level": "high", "confidence": "high", "missing": ""}'
         report = judgment.parse_report(raw)
         self.assertTrue(report["conflict"])
 
     def test_parse_json_with_markdown_fence(self):
-        raw = '```json\n{"conflict": false, "importance": "low", "confidence": "high"}\n```'
+        raw = '```json\n{"conflict": false, "gate_level": "low", "confidence": "high"}\n```'
         report = judgment.parse_report(raw)
         self.assertFalse(report["conflict"])
 
     def test_parse_json_with_extra_text(self):
-        raw = '好的，以下是判断结果：{"conflict": false, "importance": "low", "confidence": "high"} 以上。'
+        raw = '好的，以下是判断结果：{"conflict": false, "gate_level": "low", "confidence": "high"} 以上。'
         report = judgment.parse_report(raw)
         self.assertFalse(report["conflict"])
 
@@ -53,62 +53,62 @@ class TestValidateReport(unittest.TestCase):
     def test_missing_fields_get_defaults(self):
         report = judgment.validate_report({})
         self.assertFalse(report["conflict"])
-        self.assertEqual(report["importance"], "low")
+        self.assertEqual(report["gate_level"], "low")
         self.assertEqual(report["confidence"], "low")
         self.assertEqual(report["missing"], "")
 
     def test_invalid_enum_clamped(self):
-        report = judgment.validate_report({"importance": "超高", "confidence": "很确定"})
-        self.assertEqual(report["importance"], "low")
+        report = judgment.validate_report({"gate_level": "超高", "confidence": "很确定"})
+        self.assertEqual(report["gate_level"], "low")
         self.assertEqual(report["confidence"], "low")
 
 
 class TestClassify(unittest.TestCase):
     def test_l0_auto(self):
         report = judgment.validate_report({
-            "importance": "low", "confidence": "high", "missing": ""})
+            "gate_level": "low", "confidence": "high", "missing": ""})
         self.assertEqual(judgment.classify(report), "L0")
 
     def test_l1_trigger(self):
         report = judgment.validate_report({
-            "conflict": True, "importance": "low", "confidence": "high"})
+            "conflict": True, "gate_level": "low", "confidence": "high"})
         self.assertEqual(judgment.classify(report), "L1")
 
-    def test_l1_medium_importance(self):
+    def test_l1_medium_gate_level(self):
         report = judgment.validate_report({
-            "importance": "medium", "confidence": "high", "missing": ""})
+            "gate_level": "medium", "confidence": "high", "missing": ""})
         self.assertEqual(judgment.classify(report), "L1")
 
     def test_l2_high_impact(self):
         report = judgment.validate_report({
-            "high_impact": True, "importance": "low", "confidence": "high"})
+            "high_impact": True, "gate_level": "low", "confidence": "high"})
         self.assertEqual(judgment.classify(report), "L2")
 
     def test_l2_low_confidence(self):
         report = judgment.validate_report({
-            "importance": "low", "confidence": "low"})
+            "gate_level": "low", "confidence": "low"})
         self.assertEqual(judgment.classify(report), "L2")
 
     def test_l2_compliance(self):
         report = judgment.validate_report({
-            "compliance": True, "importance": "low", "confidence": "high"})
+            "compliance": True, "gate_level": "low", "confidence": "high"})
         self.assertEqual(judgment.classify(report), "L2")
 
 
 class TestRuleReport(unittest.TestCase):
-    def test_high_weight_implies_high_importance(self):
+    def test_high_boost_implies_high_gate_level(self):
         report = judgment.rule_report(
-            {"type": "preference", "weight": 9, "conclusion": "x", "reason": "y"}, [])
-        self.assertEqual(report["importance"], "high")
+            {"type": "preference", "boost": 9, "conclusion": "x", "reason": "y"}, [])
+        self.assertEqual(report["gate_level"], "high")
         self.assertEqual(report["confidence"], "low")  # 规则判断置信度恒低
 
     def test_uncertain_word_detected(self):
         report = judgment.rule_report(
-            {"type": "fact", "weight": 3, "conclusion": "x", "reason": "可能需要再看"}, [])
+            {"type": "fact", "boost": 3, "conclusion": "x", "reason": "可能需要再看"}, [])
         self.assertTrue(report["uncertain"])
 
     def test_missing_conclusion(self):
-        report = judgment.rule_report({"type": "fact", "weight": 3, "conclusion": "", "reason": ""}, [])
+        report = judgment.rule_report({"type": "fact", "boost": 3, "conclusion": "", "reason": ""}, [])
         self.assertTrue(report["missing"])
 
 
@@ -139,14 +139,14 @@ class TestConflictDetection(unittest.TestCase):
 
     def test_validate_report_conflict_object_passthrough(self):
         report = judgment.validate_report({
-            "conflict": {"ids": ["x"], "action": "UPDATE"}, "importance": "low",
+            "conflict": {"ids": ["x"], "action": "UPDATE"}, "gate_level": "low",
             "confidence": "high", "missing": ""})
         self.assertEqual(report["conflict"]["action"], "UPDATE")
 
     def test_classify_conflict_object_triggers_l1(self):
         report = judgment.validate_report({
             "conflict": {"ids": ["x"], "action": "SUPERSEDE"},
-            "importance": "low", "confidence": "high"})
+            "gate_level": "low", "confidence": "high"})
         self.assertEqual(judgment.classify(report), "L1")
 
     def test_find_related_empty_query(self):

@@ -18,7 +18,7 @@ FIELDS = (
     "valid_from",
     "invalid_at",
     "superseded_by",
-    "weight",
+    "boost",  # 入库后·排序乘数（0~10）：检索时抬升这条排多靠前。旧名 weight，见 docs/concept-glossary.md
     "author",
     "links",
     "provenance",

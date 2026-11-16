@@ -22,7 +22,7 @@ from .errors import NotFoundError, ValidationError
 # 候选入库需要保留的字段（其余元数据不进真相源）。
 CANDIDATE_FIELDS = (
     "name", "abstract", "type", "conclusion", "reason", "author",
-    "weight", "valid_from", "created", "invalid_at", "superseded_by",
+    "boost", "valid_from", "created", "invalid_at", "superseded_by",
     "source_category", "original_date", "batch",
 )
 

@@ -19,7 +19,7 @@ class TestFrontmatter(unittest.TestCase):
             "name": "虚构条目", "abstract": "一句话摘要", "type": "fact",
             "created": "2026-01-01T00:00:00+00:00",
             "updated": "2026-01-01T00:00:00+00:00",
-            "valid_from": "2026-01-01", "weight": "1.0", "author": "test",
+            "valid_from": "2026-01-01", "boost": "1.0", "author": "test",
             "links": ["项目甲", "项目乙"],
             "provenance": ["规则文件", "2026-01-01", "批次A"],
         })

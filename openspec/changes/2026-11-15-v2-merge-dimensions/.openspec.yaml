@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-11-15
+goal: 修 SUPERSEDE 判定的病根（同主题且矛盾才取代，不同侧面各自保留），并把 superseded_by 与 invalid_at 解耦（取代不失效、只降权）。纯代码重构 + 设计文档，无 spec delta——规范层面的「三结局裁决」语义变更由方向②「跨平台仲裁」change 承载。
+skip_specs: true

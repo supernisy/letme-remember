@@ -26,7 +26,7 @@
 
 #### Scenario: 超预算截断
 - **WHEN** 索引内容超过预算上限
-- **THEN** 系统 MUST 按预算截断，优先保留高权重记忆
+- **THEN** 系统 MUST 按预算截断，优先保留高排序乘数（boost）记忆
 
 ### Requirement: 主动查询正文
 

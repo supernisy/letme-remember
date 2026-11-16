@@ -22,7 +22,7 @@ updated: 2026-01-01T00:00:00+00:00
 valid_from: 2026-01-01
 invalid_at:
 superseded_by:
-weight: 1.0
+boost: 1.0
 author: human
 links:
 provenance:

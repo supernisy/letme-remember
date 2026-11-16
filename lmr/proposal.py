@@ -16,7 +16,7 @@ from .errors import NotFoundError, ValidationError
 
 # 分类表：确定性操作脚本自动做；需要判断的操作必须出提案等人确认。
 DETERMINISTIC = frozenset({
-    "normalize_date", "adjust_weight", "add_link", "dedupe_exact", "categorize",
+    "normalize_date", "adjust_boost", "add_link", "dedupe_exact", "categorize",
 })
 APPROVAL_REQUIRED = frozenset({
     "merge", "split", "supersede", "delete", "purge", "update_abstract",
@@ -99,7 +99,7 @@ def _raw_from_file(paths, entry_id):
     return {
         "name": meta["name"], "abstract": meta["abstract"], "type": meta["type"],
         "conclusion": sections["结论"], "reason": sections["理由"],
-        "author": meta["author"], "weight": meta["weight"],
+        "author": meta["author"], "boost": meta["boost"],
         "valid_from": meta["valid_from"], "created": meta["created"],
         "links": meta["links"], "provenance": meta["provenance"],
     }

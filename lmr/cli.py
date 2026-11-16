@@ -23,7 +23,7 @@ from .errors import EXIT_INTERNAL, EXIT_OK, EXIT_VALIDATION, MemError, NotFoundE
 
 CANDIDATE_FIELDS = (
     "name", "abstract", "type", "conclusion", "reason", "author", "key",
-    "weight", "valid_from", "created", "invalid_at", "superseded_by",
+    "boost", "valid_from", "created", "invalid_at", "superseded_by",
     "source_category", "original_date", "batch",
 )
 
@@ -54,7 +54,7 @@ def _build_parser():
     record.add_argument("--reason", help="理由正文（必填）")
     record.add_argument("--author", help="写入者标识")
     record.add_argument("--key", help="按类型分组键自动推导身份名")
-    record.add_argument("--weight", help="权重，范围 [0, 10]")
+    record.add_argument("--boost", help="排序乘数，范围 [0, 10]（检索时抬升排位）")
     record.add_argument("--valid-from", dest="valid_from", help="生效日期 ISO 8601")
     record.add_argument("--created", help="创建时间（一般留空由系统生成）")
     record.add_argument("--invalid-at", dest="invalid_at", help="失效日期")

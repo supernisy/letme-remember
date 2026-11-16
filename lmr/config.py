@@ -29,8 +29,9 @@ DEFAULT_SETTINGS = {
     "recency_decay_base": 0.5,
     # 被取代条目（带 superseded_by）在检索时的降权因子，<1；幅度后期用指标调
     "supersede_penalty": 0.5,
-    "weight_min": 0.0,
-    "weight_max": 10.0,
+    # boost = 入库后排序乘数（0~10），检索时抬升条目排位（旧名 weight，见 docs/concept-glossary.md）
+    "boost_min": 0.0,
+    "boost_max": 10.0,
     "allowlist_extra": [],
     # v1.1 LLM 软判断 / 批量蒸馏（默认关闭、不联网，key 只从私有来源读取）
     "llm_enabled": False,
@@ -40,7 +41,7 @@ DEFAULT_SETTINGS = {
     # v1.3 本地语义检索（可选依赖，未装 sentence-transformers 时自动降级）
     "embedding_enabled": True,
     "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
-    "semantic_weight": 0.5,
+    "semantic_mix": 0.5,  # 语义 vs 关键词的混合比例（旧名 semantic_weight；0.5=各占一半）
 }
 
 

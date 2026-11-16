@@ -65,7 +65,7 @@ def _read_memories():
     conn = _connect(paths.db)
     try:
         rows = conn.execute(
-            "SELECT id, name, abstract, type, weight, created, updated, "
+            "SELECT id, name, abstract, type, boost, created, updated, "
             "valid_from, invalid_at, superseded_by, author, provenance "
             "FROM memories WHERE archived=0"
         ).fetchall()
@@ -163,7 +163,7 @@ def _overview():
     type_count = {"semantic": 0, "episodic": 0, "procedural": 0}
     superseded = 0
     has_links = 0
-    has_importance = 0
+    has_boost = 0
     authors = {}
     for m in memories:
         t = m.get("type")
@@ -173,6 +173,8 @@ def _overview():
             superseded += 1
         if m.get("provenance"):
             has_links += 1
+        if m.get("boost"):
+            has_boost += 1
         a = m.get("author") or "(空)"
         authors[a] = authors.get(a, 0) + 1
     author_list = sorted(authors.items(), key=lambda kv: -kv[1])
@@ -188,7 +190,7 @@ def _overview():
         "type_count": type_count,
         "superseded": superseded,
         "has_provenance": has_links,
-        "has_importance": has_importance,
+        "has_boost": has_boost,
         "files": _count_files(paths),
         "authors": [{"name": k, "n": v} for k, v in author_list],
         "vector": vec,

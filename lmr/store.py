@@ -23,7 +23,7 @@ updated: 2026-01-01T00:00:00+00:00
 valid_from: 2026-01-01
 invalid_at:
 superseded_by:
-weight: 1.0
+boost: 1.0
 author: sample
 links:
 provenance:
@@ -116,7 +116,7 @@ def build_candidate(raw):
     meta["type"] = schema.canonical_type(raw_type) if schema.canonical_type(raw_type) else raw_type
     meta["created"] = str(raw.get("created") or now.isoformat()).strip()
     meta["updated"] = now.isoformat()
-    meta["weight"] = str(raw.get("weight") if raw.get("weight") is not None else "1.0").strip()
+    meta["boost"] = str(raw.get("boost") if raw.get("boost") is not None else "1.0").strip()
     meta["links"] = [str(item) for item in (raw.get("links") or [])]
     meta["invalid_at"] = str(raw.get("invalid_at") or "").strip()
     meta["superseded_by"] = str(raw.get("superseded_by") or "").strip()

@@ -2,7 +2,7 @@
 
 覆盖 testing capability 的覆盖率门禁：distill 是 domain 核心层。
 关键点：不真连网络，用 stub client（注入假 chat 方法）验证蒸馏器的
-核心逻辑——JSON 提取、importance 截断、导入字段完整性校验。
+核心逻辑——JSON 提取、keep_score 截断、导入字段完整性校验。
 """
 
 import unittest
@@ -41,29 +41,29 @@ class TestExtractJsonArray(unittest.TestCase):
 
 
 class TestLLMDistiller(unittest.TestCase):
-    def test_distill_filters_low_importance(self):
+    def test_distill_filters_low_keep_score(self):
         raw = (
-            '[{"name": "高重要性", "importance": 5},'
-            ' {"name": "低重要性", "importance": 1},'
-            ' {"name": "无importance字段", "importance": 3}]'
+            '[{"name": "高重要性", "keep_score": 5},'
+            ' {"name": "低重要性", "keep_score": 1},'
+            ' {"name": "无keep_score字段", "keep_score": 3}]'
         )
         client = StubClient(raw)
-        d = distill.LLMDistiller(client, importance_min=3)
+        d = distill.LLMDistiller(client, keep_score_min=3)
         result = d.distill("任意长文本")
-        # importance < 3 的丢弃；importance 字段被剥掉
-        self.assertEqual([c["name"] for c in result], ["高重要性", "无importance字段"])
-        self.assertTrue(all("importance" not in c for c in result))
+        # keep_score < 3 的丢弃；keep_score 字段被剥掉
+        self.assertEqual([c["name"] for c in result], ["高重要性", "无keep_score字段"])
+        self.assertTrue(all("keep_score" not in c for c in result))
 
     def test_distill_non_dict_dropped(self):
         raw = '[{"name": "有效"}, "字符串而非字典"]'
-        d = distill.LLMDistiller(StubClient(raw), importance_min=3)
+        d = distill.LLMDistiller(StubClient(raw), keep_score_min=3)
         result = d.distill("文本")
         self.assertEqual([c["name"] for c in result], ["有效"])
 
-    def test_filter_importance_invalid_value(self):
-        raw = '[{"name": "a", "importance": "不是数字"}, {"name": "b", "importance": 5}]'
-        d = distill.LLMDistiller(StubClient(raw), importance_min=3)
-        # importance 非法时按 IMPORTANCE_MIN 处理，等于阈值 → 保留
+    def test_filter_keep_score_invalid_value(self):
+        raw = '[{"name": "a", "keep_score": "不是数字"}, {"name": "b", "keep_score": 5}]'
+        d = distill.LLMDistiller(StubClient(raw), keep_score_min=3)
+        # keep_score 非法时按 KEEP_SCORE_MIN 处理，等于阈值 → 保留
         result = d.distill("文本")
         self.assertEqual([c["name"] for c in result], ["a", "b"])
 

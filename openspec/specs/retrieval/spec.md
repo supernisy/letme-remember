@@ -28,11 +28,11 @@
 
 ### Requirement: 排序公式
 
-检索结果 SHALL 按「相关度 × 权重 × 新鲜度」排序。
+检索结果 SHALL 按「相关度 × 排序乘数 × 新鲜度」排序。
 
 #### Scenario: 排序计算
 - **WHEN** 返回多条候选记忆
-- **THEN** 按 relevance（相关度）× weight（权重）× recency（新鲜度）计算最终分数并排序
+- **THEN** 按 relevance（相关度）× boost（排序乘数）× recency（新鲜度）计算最终分数并排序
 
 ### Requirement: 时间衰减与兜底
 

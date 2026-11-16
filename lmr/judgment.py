@@ -7,7 +7,7 @@
 
 体检报告字段（六触发器 + 补充维度）：
   conflict / high_impact / ambiguous / novel_type / compliance / uncertain
-  + importance / confidence / missing
+  + gate_level / confidence / missing
 
 v1.1 冲突检测增强（#10）：
   conflict 字段升级为「冲突对象 + 建议操作」，显式判定
@@ -24,11 +24,11 @@ from . import llm
 # 六触发器 + 三补充维度，构成完整体检报告。
 REPORT_KEYS = (
     "conflict", "high_impact", "ambiguous", "novel_type",
-    "compliance", "uncertain", "importance", "confidence", "missing",
+    "compliance", "uncertain", "gate_level", "confidence", "missing",
 )
 
-# 重要性三档、置信度三档（与 spec 对齐）。
-IMPORTANCE_LEVELS = ("low", "medium", "high")
+# 门禁级（审批分级阀）三档、置信度三档（与 spec 对齐）。
+GATE_LEVELS = ("low", "medium", "high")
 CONFIDENCE_LEVELS = ("low", "medium", "high")
 
 # 冲突检测增强（#10）：建议操作四值。
@@ -57,7 +57,7 @@ JUDGMENT_PROMPT = """你是记忆仓库的第二审质检员。对下面这条�
 - novel_type: 布尔。类型是否未定义过（type 不在 semantic/episodic/procedural 三类之内）。
 - compliance: 布尔。是否疑似触碰合规/隐私边界（脚本未拦但可疑）。
 - uncertain: 布尔。候选理由中是否含「可能/也许/例外」等不确定表述。
-- importance: 字符串，low/medium/high 之一。这条结论对用户的重要程度。
+- gate_level: 字符串，low/medium/high 之一。这条结论的重要程度（用于决定进不进审批队列 L0/L1/L2，是「门禁分级阀」，非落库字段）。
 - confidence: 字符串，low/medium/high 之一。你对上面判断的置信度。
 - missing: 字符串。缺失的关键信息（如缺来源、缺理由、缺有效期），没有则空字符串。
 
@@ -122,8 +122,8 @@ def validate_report(report: dict) -> dict:
             clean[key] = _normalize_conflict(val)
         elif key in ("high_impact", "ambiguous", "novel_type", "compliance", "uncertain"):
             clean[key] = bool(val)
-        elif key == "importance":
-            clean[key] = val if val in IMPORTANCE_LEVELS else "low"
+        elif key == "gate_level":
+            clean[key] = val if val in GATE_LEVELS else "low"
         elif key == "confidence":
             clean[key] = val if val in CONFIDENCE_LEVELS else "low"
         elif key == "missing":
@@ -154,7 +154,7 @@ def classify(report: dict) -> str:
     # L1：任一触发器命中，或中等重要，或中置信，或缺失关键信息 —— 进待审批队列。
     if (report["conflict"] or report["ambiguous"] or report["novel_type"]
             or report["uncertain"] or report["missing"]
-            or report["importance"] != "low" or report["confidence"] == "medium"):
+            or report["gate_level"] != "low" or report["confidence"] == "medium"):
         return "L1"
     # L0：无冲突、无缺失、低重要、高置信 —— 自动入库。
     return "L0"
@@ -173,13 +173,13 @@ def rule_report(candidate: dict, existing: list[str]) -> dict:
     - high_impact：仅当操作类型为删除/作废时判 True；
     - novel_type：靠类型是否在 CoALA 三类之内判断；
     - uncertain：靠理由里是否含不确定词判断；
-    - 其余维度取保守默认（importance 依 weight 推断，confidence 一律 low）。
+    - 其余维度取保守默认（gate_level 依 boost 推断，confidence 一律 low）。
     """
     from . import schema as _schema  # 延迟导入，避免循环依赖
 
     valid_types = set(_schema.TYPES)
     ctype = _schema.canonical_type(candidate.get("type", "")) or candidate.get("type", "")
-    weight = candidate.get("weight", 0)
+    boost = candidate.get("boost", 0)
     reason = candidate.get("reason", "") or ""
 
     report = {
@@ -189,7 +189,7 @@ def rule_report(candidate: dict, existing: list[str]) -> dict:
         "novel_type": bool(ctype) and ctype not in valid_types,
         "compliance": False,
         "uncertain": bool(UNCERTAIN_WORDS.search(reason)),
-        "importance": "high" if weight >= 8 else ("medium" if weight >= 5 else "low"),
+        "gate_level": "high" if boost >= 8 else ("medium" if boost >= 5 else "low"),
         "confidence": "low",
         "missing": "",
     }
