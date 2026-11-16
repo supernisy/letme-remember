@@ -34,3 +34,12 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+
+# 前端工程（gui/）：依赖与构建产物可重建，不入库
+# 与「索引可重建不入库」哲学一致——首次使用 GUI 需 cd gui && pnpm install && pnpm build
+gui/node_modules/
+gui/dist/
+*.tsbuildinfo
+
+# verify-suite 采集临时产物（语义指纹 JSON 等，可重采，不入库）
+/out/

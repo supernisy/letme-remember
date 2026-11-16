@@ -1,13 +1,13 @@
 """letme-remember 只读 GUI 后端（零新依赖，标准库 http.server）。
 
 设计约束（对齐 serve.py 的既有哲学）：
-- 只读：所有 API 只查询，绝不写 store / index / audit。写操作口子留给后续。
+- 当前阶段只读：所有 API 只查询，绝不写 store / index / audit。写/编辑操作是后续明确要做的，路由与口子已预留（见下方「写操作预留」注释），不是永久只读。
 - 零新依赖：只用标准库 http.server / json / sqlite3 / urllib。
 - 复用 lmr：config.Paths 定位数据、frontmatter 解析、index.Index 读索引。
 - 可重建：全部数据来自 SQLite 索引与 store 文件，服务本身无状态。
 
 启动：python mem.py gui [--port 8787] [--host 127.0.0.1]
-前端：gui-demo/index.html 通过 fetch 调本服务的 JSON API。
+前端：gui/dist/（Vite + Vue3 构建产物，先 `cd gui && pnpm build`）；无 dist 时回退 gui-demo/ 旧单文件。
 
 API：
   GET /api/overview      总览统计（类型分布、健康四维、来源分布、数据状态）
@@ -396,19 +396,49 @@ class _Handler(BaseHTTPRequestHandler):
                     self._send(detail)
             elif path in ("/", "/index.html"):
                 self._serve_html()
+            elif path.startswith("/assets/"):
+                self._serve_static(path)
             else:
                 self._send({"error": "unknown path"}, 404)
         except Exception as e:  # noqa: BLE001
             self._send({"error": str(e)}, 500)
 
+    # 前端静态文件：优先 dist/（Vite 构建产物），无 dist 时回退 gui-demo/（旧单文件）。
+    def _frontend_root(self):
+        root = Path(__file__).resolve().parent.parent / "gui"
+        dist = root / "dist"
+        if dist.is_dir():
+            return dist
+        return root.parent / "gui-demo"
+
     def _serve_html(self):
-        html_path = Path(__file__).resolve().parent.parent / "gui-demo" / "index.html"
+        html_path = self._frontend_root() / "index.html"
         if not html_path.is_file():
-            self._send({"error": "gui-demo/index.html 未找到"}, 404)
+            self._send({"error": "前端 index.html 未找到（请先在 gui/ 执行 pnpm build）"}, 404)
             return
         data = html_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_static(self, path):
+        # 只允许 /assets/ 下的静态资源，防目录穿越。
+        rel = path.lstrip("/")
+        if ".." in rel:
+            self._send({"error": "bad path"}, 400)
+            return
+        asset_path = self._frontend_root() / rel
+        if not asset_path.is_file():
+            self._send({"error": "asset not found"}, 404)
+            return
+        data = asset_path.read_bytes()
+        ctype = "text/css" if asset_path.suffix == ".css" else "application/javascript"
+        if asset_path.suffix == ".svg":
+            ctype = "image/svg+xml"
+        self.send_response(200)
+        self.send_header("Content-Type", ctype + "; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

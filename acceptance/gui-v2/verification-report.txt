@@ -1,0 +1,26 @@
+PASS  工程化与技术栈-1
+      dist/index.html=true, assets=2 个（含 js/css）
+PASS  工程化与技术栈-2
+      首页 HTTP 200（Vue 挂载点存在=true），API 状态：{"overview":200,"status":200,"health":200,"memories":200,"audit":200,"memory/{id}":200}
+PASS  四个视图完整迁移-1
+      健康判定="健康"，sections=["记忆类型分布","数据状态","来源分布"]，/api/overview 被调用=true
+PASS  四个视图完整迁移-2
+      状态项=["常驻召回服务","语义检索（embedding）","向量库"]，/api/status 被调用=true
+PASS  四个视图完整迁移-3
+      搜索=true 类型过滤=true 被取代过滤=true 分页=true /api/memories=true；不变量 limit5→5 条, limit20→20 条, 单调=true
+PASS  四个视图完整迁移-4
+      诊断条目=5，/api/health 被调用=true
+PASS  主题一致性-1
+      body 背景=rgb(245, 246, 248)（浅色=true），文字=rgb(31, 35, 41)（深色=true）
+PASS  无障碍-1
+      Tab 首焦点={"tag":"A","role":"tab","text":"系统状态","outline":"solid","outlineW":"2px"}（可见焦点=true），role=tab 导航项=4/4，main 语义=1
+PASS  无障碍-2
+      正文对比度=14.59:1（≥4.5 要求），prefers-reduced-motion 降级=true
+PASS  概念字段对齐-1
+      卡片显示 boost=true（样例="boost 1"），undefined/weight/importance 残留=false，构建 JS 语义残留=false
+PASS  写操作口子预留-1
+      「当前只读」=true，「写/编辑待开放」=true，终态表述（永久只读/写操作未开放）=false
+PASS  响应式布局-1
+      320px：grid 列="320px"（单列=true），横向滚动=false（scrollW=320 clientW=320），导航可见=true 项数=4
+
+===== 验收汇总：12/12 通过 =====

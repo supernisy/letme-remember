@@ -1,0 +1,61 @@
+/* letme-remember GUI 设计令牌（语义层）
+ *
+ * 浅色主题，对齐用户 IDE 的 light 主题。
+ * 语义令牌（surface/content/action/danger/focus/success）优先，
+ * 再映射到具体颜色，避免用同一颜色表达冲突语义。
+ *
+ * 记忆类型三色（保留原 GUI 的语义锚点）：
+ *   semantic   语义记忆（结论）   → 青绿
+ *   episodic   情景记忆（经历）   → 琥珀
+ *   procedural 程序记忆（方法）   → 靛蓝
+ */
+
+:root {
+  /* —— surface 层 —— */
+  --surface-page: #f5f6f8;      /* 页面底 */
+  --surface-panel: #ffffff;     /* 卡片/面板 */
+  --surface-panel-2: #fafbfc;   /* 次级面板 */
+  --surface-hover: #f0f2f5;     /* 悬停 */
+
+  /* —— content 层（文字） —— */
+  --content-primary: #1f2329;   /* 正文（对比度 > 12:1） */
+  --content-secondary: #4e5969; /* 次要（> 7:1） */
+  --content-muted: #86909c;     /* 弱化（> 4.5:1 需谨慎，仅用于辅助） */
+  --content-hint: #a9aeb8;      /* 占位/提示 */
+
+  /* —— 边框 —— */
+  --border-base: #e5e6eb;
+  --border-strong: #c9cdd4;
+
+  /* —— action / focus / success / danger —— */
+  --action-primary: #165dff;    /* 主操作（AntD 蓝，light 下对比度达标） */
+  --action-hover: #4080ff;
+  --focus-ring: #165dff;        /* 可见焦点（WCAG 要求） */
+  --success: #00b42a;
+  --warning: #ff7d00;
+  --danger: #f53f3f;
+
+  /* —— 记忆类型三色（语义锚点，浅色底上加深一档保证对比度） —— */
+  --type-semantic: #0aa679;     /* semantic → 青绿 */
+  --type-episodic: #d25f00;     /* episodic → 琥珀（加深） */
+  --type-procedural: #4e5cc8;   /* procedural → 靛蓝（加深） */
+
+  /* —— 股票语义色（中国习惯：涨红跌绿） —— */
+  --up: #f53f3f;
+  --down: #00b42a;
+
+  /* —— 几何 —— */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* —— 阴影（克制，仅层叠用） —— */
+  --shadow-panel: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 4px rgba(15, 23, 42, 0.06);
+  --shadow-float: 0 4px 12px rgba(15, 23, 42, 0.08);
+}

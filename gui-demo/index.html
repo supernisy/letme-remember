@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>letme-remember · 记忆控制台（只读原型）</title>
+<title>letme-remember · 记忆控制台</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --line:#2a2f3a;
@@ -177,7 +177,7 @@
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brand">letme-remember<small>记忆控制台 · 只读原型 v0.1</small></div>
+    <div class="brand">letme-remember<small>记忆控制台 v0.2 · 当前只读</small></div>
     <nav class="nav">
       <a data-view="dashboard" class="active"><span class="dot" style="background:#5dc2a0"></span>总览</a>
       <a data-view="status"><span class="dot" style="background:#7f8de0"></span>服务状态</a>
@@ -193,7 +193,7 @@
           <h1>总览</h1>
           <div class="sub">系统是否在正常跑 · 有没有要你处理的事</div>
         </div>
-        <span class="readonly">只读模式 · 写操作未开放</span>
+        <span class="readonly">当前只读 · 写/编辑待开放</span>
       </div>
 
       <div id="verdict" class="verdict"></div>
@@ -239,7 +239,7 @@
               <div class="row"><span>活跃 active</span><span class="n" id="s-active">—</span></div>
               <div class="row"><span>已被取代 superseded</span><span class="n" id="s-sup">—</span></div>
               <div class="row"><span>含关联 links</span><span class="n" id="s-links">—</span></div>
-              <div class="row"><span>含 importance 评分</span><span class="n" id="s-imp">—</span></div>
+              <div class="row"><span>含 boost 评分</span><span class="n" id="s-imp">—</span></div>
               <div class="row"><span>store 文件数</span><span class="n" id="s-files">—</span></div>
             </div>
           </div>
@@ -251,9 +251,9 @@
       <div class="pagehead">
         <div>
           <h1>服务状态</h1>
-          <div class="sub">运行中各组件的健康状态，以及未来可开关项（本期只读）</div>
+          <div class="sub">运行中各组件的健康状态，以及未来可开关项（当前只读）</div>
         </div>
-        <span class="readonly">只读模式 · 写操作未开放</span>
+        <span class="readonly">当前只读 · 写/编辑待开放</span>
       </div>
 
       <div class="section">
@@ -282,9 +282,9 @@
       <div class="pagehead">
         <div>
           <h1>记忆浏览</h1>
-          <div class="sub">检索全部记忆，点开查看完整元数据与内容（只读）</div>
+          <div class="sub">检索全部记忆，点开查看完整元数据与内容（当前只读）</div>
         </div>
-        <span class="readonly">只读模式 · 写操作未开放</span>
+        <span class="readonly">当前只读 · 写/编辑待开放</span>
       </div>
 
       <div class="toolbar">
@@ -306,9 +306,9 @@
       <div class="pagehead">
         <div>
           <h1>记忆体检</h1>
-          <div class="sub">逐条记忆的完整诊断指标 + 指标口径（业界 mem-gc 四维模型，本期只读）</div>
+          <div class="sub">逐条记忆的完整诊断指标 + 指标口径（业界 mem-gc 四维模型，当前只读）</div>
         </div>
-        <span class="readonly">只读模式 · 写操作未开放</span>
+        <span class="readonly">当前只读 · 写/编辑待开放</span>
       </div>
 
       <div class="section">
@@ -329,7 +329,7 @@
       </div>
     </div>
 
-    <div class="foot">letme-remember GUI 原型 · 数据为本地 store 真实统计（739 条）· 当前仅只读，写操作口子已预留未实现</div>
+    <div class="foot">letme-remember GUI · 数据为本地 store 真实统计（739 条）· 当前只读，写/编辑口子已预留、待开放</div>
   </main>
 </div>
 
@@ -393,7 +393,7 @@ function renderSysStatus(){
      name:"embedding 模型",
      desc: emb.enabled ? (emb.model || "已配置") : "已禁用，语义检索不可用"},
     {light:"gray", name:"记忆写入",
-     desc:"本期只读，写操作口子未开放（编辑/删除/取代待做）"}
+     desc:"当前只读，写/编辑口子未开放（编辑/删除/取代待做）"}
   ];
   document.getElementById('sys-status').innerHTML = cards.map(c=>`
     <div class="sys-card">
@@ -435,10 +435,10 @@ function renderInsights(){
       action:"", actFn:""});
   }
 
-  // P3 信息：importance 缺失
-  if(!o.has_importance){
-    ins.push({prio:"info", prioTxt:"信息", cls:"", title:"记忆没有重要度打分",
-      why:"importance 字段全缺，检索排序无法区分承重墙和可有可无。这是后续重要度分类法要补的口子。",
+  // P3 信息：boost（排序乘数）缺失
+  if(!o.has_boost){
+    ins.push({prio:"info", prioTxt:"信息", cls:"", title:"记忆没有 boost 排序乘数",
+      why:"boost 字段全缺，检索排序无法区分承重墙和可有可无。这是后续重要度分类法要补的口子。",
       action:"", actFn:""});
   }
 
@@ -468,7 +468,7 @@ function goSuperseded(){
 }
 function goEmbed(){
   // 只读界面不做写操作；提示用户在哪执行
-  alert("在项目目录执行：\npython mem.py embed\n\n（GUI 本期只读，不代跑写操作）");
+  alert("在项目目录执行：\npython mem.py embed\n\n（GUI 当前只读，不代跑写操作）");
 }
 
 // 顶部一句话健康判定
@@ -499,7 +499,7 @@ function renderDashboard(){
   document.getElementById('s-active').textContent = o.total - o.superseded;
   document.getElementById('s-sup').textContent = o.superseded;
   document.getElementById('s-links').textContent = o.has_provenance;
-  document.getElementById('s-imp').textContent = o.has_importance;
+  document.getElementById('s-imp').textContent = o.has_boost;
   document.getElementById('s-files').textContent = o.files.store;
 
   const legend = document.getElementById('donut-legend');
@@ -565,7 +565,7 @@ function renderStatus(){
     {on: sv.on, k:"召回服务 serve", v: sv.v},
     {on: vecOn ? "on":"warn", k:"向量库", v: vecOn ? `已向量化 · ${vec.dim||"?"} 维 · ${vec.indexed} 条` : "未向量化（跑 embed 命令补建）"},
     {on: emb.enabled ? "on":"off", k:"embedding 模型", v: emb.enabled ? emb.model : "已禁用"},
-    {on:"warn", k:"importance 评分字段", v:"缺失 · 全部记忆无此字段"},
+    {on:"warn", k:"boost 排序乘数字段", v:"缺失 · 全部记忆无此字段"},
     {on:"off", k:"Honeypot 观测层", v:"未启用 · 方向规划中"}
   ];
   document.getElementById('health-list').innerHTML = health.map(h=>
@@ -610,7 +610,7 @@ function memCard(m, i, src){
     <div class="meta">
       <span>${esc((m.updated||m.created||"").slice(0,10))}</span>
       <span>${esc(shortAuthor(m.author))}</span>
-      <span>weight ${m.weight}</span>
+      <span>boost ${m.boost}</span>
     </div>
   </div>`;
 }
@@ -753,7 +753,7 @@ function renderDetailInto(detail){
     <h3>元数据</h3>
     <div class="kvs">
       <div class="kv"><span class="k">type</span><span class="v">${esc(meta.type)}</span></div>
-      <div class="kv"><span class="k">weight</span><span class="v">${esc(meta.weight)}</span></div>
+      <div class="kv"><span class="k">boost</span><span class="v">${esc(meta.boost)}</span></div>
       <div class="kv"><span class="k">created</span><span class="v">${esc(meta.created)}</span></div>
       <div class="kv"><span class="k">updated</span><span class="v">${esc(meta.updated)}</span></div>
       <div class="kv"><span class="k">valid_from</span><span class="v">${esc(meta.valid_from)}</span></div>

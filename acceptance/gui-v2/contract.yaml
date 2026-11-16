@@ -1,0 +1,99 @@
+contract: spec
+intent: |-
+  【工程化与技术栈】
+  GUI SHALL 从单文件 HTML 原型重构为 Vite + Vue 3 + TypeScript + Ant Design Vue 的可编译工程，位于 `gui/` 目录，构建产出 `gui/dist/` 静态文件。
+
+  【四个视图完整迁移】
+  GUI SHALL 保留四个视图：总览、系统状态、记忆浏览、记忆体检，功能与原原型一致。
+
+  【主题一致性】
+  GUI SHALL 使用浅色主题，与用户 IDE 的 light 主题一致，不再使用深色背景。
+
+  【无障碍】
+  GUI SHALL 满足 WCAG 2.2 AA 基线：键盘路径、可见焦点、语义结构、对比度。
+
+  【响应式布局】
+  GUI SHALL 在窄屏（手机/窄窗）下可用，不因固定宽度溢出。
+
+  【概念字段对齐】
+  GUI SHALL 使用改名后的概念字段：排序乘数用 `boost`，不再使用 `weight`；审批/筛选阀用 `gate_level`/`keep_score`，不再使用 `importance`。
+
+  【写操作口子预留】
+  GUI SHALL 明确标注「当前只读」，并为后续写/编辑操作预留口子，不将只读表述为永久状态。
+accept:
+  - id: 工程化与技术栈-1
+    given: GUI SHALL 从单文件 HTML 原型重构为 Vite + Vue 3 + TypeScript + Ant Design Vue 的可编译工程，位于 `gui/` 目录，构建产出 `gui/dist/` 静态文件。
+    when: 在 `gui/` 目录执行构建命令
+    then: 产出 `dist/index.html` 及静态资源；构建产物无需后端即可被静态服务器 serve
+    verify: unit-visual
+    verify_source: inferred
+  - id: 工程化与技术栈-2
+    given: GUI SHALL 从单文件 HTML 原型重构为 Vite + Vue 3 + TypeScript + Ant Design Vue 的可编译工程，位于 `gui/` 目录，构建产出 `gui/dist/` 静态文件。
+    when: 用户通过 `python mem.py gui` 启动
+    then: 后端 SHALL serve `gui/dist/` 目录下的静态文件；保留全部 6 个只读 JSON API 不变
+    verify: contract-test
+    verify_source: inferred
+  - id: 四个视图完整迁移-1
+    given: GUI SHALL 保留四个视图：总览、系统状态、记忆浏览、记忆体检，功能与原原型一致。
+    when: 用户打开 GUI 首页
+    then: 显示一句话健康判定、类型分布、数据状态、来源分布；数据来自 `/api/overview` 接口
+    verify: contract-test
+    verify_source: inferred
+  - id: 四个视图完整迁移-2
+    given: GUI SHALL 保留四个视图：总览、系统状态、记忆浏览、记忆体检，功能与原原型一致。
+    when: 用户切换到系统状态
+    then: 显示向量库、embedding、常驻服务的运行状态；数据来自 `/api/status` 接口
+    verify: ax
+    verify_source: explicit
+  - id: 四个视图完整迁移-3
+    given: GUI SHALL 保留四个视图：总览、系统状态、记忆浏览、记忆体检，功能与原原型一致。
+    when: 用户切换到记忆浏览
+    then: 支持关键词搜索、类型过滤、被取代过滤、分页；数据来自 `/api/memories` 接口
+    verify: ax
+    verify_source: explicit
+    invariants:
+      - 增大 limit 分页参数后，返回的条目数不减少（单调性）
+  - id: 四个视图完整迁移-4
+    given: GUI SHALL 保留四个视图：总览、系统状态、记忆浏览、记忆体检，功能与原原型一致。
+    when: 用户切换到记忆体检
+    then: 显示逐条记忆的健康诊断（冲突/过期/缺来源）；数据来自 `/api/health` 接口
+    verify: ax
+    verify_source: explicit
+  - id: 主题一致性-1
+    given: GUI SHALL 使用浅色主题，与用户 IDE 的 light 主题一致，不再使用深色背景。
+    when: 页面加载
+    then: 背景为浅色、正文为深色文字；语义色（涨红跌绿等）在浅色底上保持可读
+    verify: ax
+    verify_source: inferred
+  - id: 无障碍-1
+    given: GUI SHALL 满足 WCAG 2.2 AA 基线：键盘路径、可见焦点、语义结构、对比度。
+    when: 用户使用键盘 Tab 导航
+    then: 所有交互元素 SHALL 可聚焦且有可见焦点样式；不依赖鼠标即可完成主要操作
+    verify: ax
+    verify_source: inferred
+  - id: 无障碍-2
+    given: GUI SHALL 满足 WCAG 2.2 AA 基线：键盘路径、可见焦点、语义结构、对比度。
+    when: 文本与背景呈现
+    then: 正文对比度 SHALL 达到 4.5:1；系统偏好减少动效时 SHALL 降级动画
+    verify: ax
+    verify_source: inferred
+  - id: 响应式布局-1
+    given: GUI SHALL 在窄屏（手机/窄窗）下可用，不因固定宽度溢出。
+    when: 视口宽度缩小到 320px
+    then: 布局 SHALL 重排为单列，不产生横向滚动；侧边导航折叠为可触达的入口
+    verify: unit-visual
+    verify_source: inferred
+  - id: 概念字段对齐-1
+    given: GUI SHALL 使用改名后的概念字段：排序乘数用 `boost`，不再使用 `weight`；审批/筛选阀用 `gate_level`/`keep_score`，不再使用 `importance`。
+    when: 记忆卡片展示排序信息
+    then: 显示 `boost` 字段值，不显示 `weight`；不存在 `weight`/`importance` 字段引用
+    verify: unit-visual
+    verify_source: inferred
+  - id: 写操作口子预留-1
+    given: GUI SHALL 明确标注「当前只读」，并为后续写/编辑操作预留口子，不将只读表述为永久状态。
+    when: 页面呈现只读状态
+    then: 文案 SHALL 表述为「当前只读 / 写·编辑待开放」；不出现「永久只读」或「写操作未开放」这类终态表述
+    verify: unit-visual
+    verify_source: inferred
+out_of_scope:
+  - （本契约由 OpenSpec spec.md 桥接生成，验收范围以 spec 为准）
