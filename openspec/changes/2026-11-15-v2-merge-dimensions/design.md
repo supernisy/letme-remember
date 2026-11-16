@@ -1,84 +1,56 @@
-# 方向①「取代改维度追加 + 检索多信号降权」设计文档
+## Context
 
-> 读者：项目主导者（super）｜用途：固化方向①的需求收敛结论与实现边界，实现前供审。
+方向①「合并多维」经三轮讨论收敛为：不删重复记忆、不做物理合并、不加维度字段，只修「取代」判定病根 + 检索多信号降权。见 proposal.md - Why。
 
-## 一、需求收敛（经三轮讨论后的最终结论）
+现有实现（`index.py:293`）检索公式为 `score = fused × weight × recency`；`judgment.py` 的 SUPERSEDE 是「二选一」语义；`validate.py` 强制 `superseded_by` 绑定 `invalid_at`。
 
-**一句话**：不删重复记忆、不做物理合并、不加维度字段；只做两件具体小事——修「取代」判定的病根，把已有的时间轴/重要性字段真正接进检索。
+## Goals / Non-Goals
 
-### 1.1 病根
+**Goals:**
 
-现有 `judgment.py` 的 SUPERSEDE 是「二选一」语义：能并存=UPDATE，不能并存=SUPERSEDE（整体作废旧条目）。但现实中大量信息既非简单并存、也非矛盾，而是「同一实体、不同侧面，各自都真」。被粗暴判成取代后，另一侧面的洞见被埋掉。
+- 修 SUPERSEDE 判定：只有「同主题且真矛盾」才取代，不同侧面各自保留。
+- 检索接入 supersede_penalty：被取代条目降权而非排除。
+- 解耦 superseded_by 与 invalid_at：取代不失效、只降权。
 
-### 1.2 用户明确的三条边界（不可违反）
+**Non-Goals:**
 
-1. **不删重复记忆**：有新增就加，没新增就不加；来源有几条、是否重复，不在意。
-2. **被取代的旧结论 → 检索「降权」而非「完全排除」**；降权幅度后期用指标调，本期不写死。
-3. **不加固定维度枚举字段**：记忆是通用记忆（不只面试），任何枚举都框不住。
+- 不做多维物理合并成一条。
+- 不做知识图谱（实体-关系三元组）。
+- 不加固定维度枚举字段。
+- 不把降权幅度本期写死（留 settings 可调，后期用指标定）。
 
-## 二、业界依据（已查证，多来源共识）
+## Decisions
 
-| 来源 | 关键结论 |
-|---|---|
-| Mem0 官方文档 | 「ADD-only extraction」——新事实和旧事实**都保留**，从不覆盖删除；检索时靠多信号 + 时间推理选出「当下该信哪条」 |
-| 数据仓库 SCD Type 2（db0 博客等） | 旧值不删、标记取代、**默认检索降权/排除但审计可查** |
-| 多信号检索（Mem0/Google/多个实现） | 排序 = 相关度 × 时效性 × 重要性，**靠检索时的硬过滤 + 加权**，而非写入时合并 |
-| MRMS 论文 / ChronoMem | 用「取代边/版本」标记新旧关系，而非删节点 |
+### 决策 1：SUPERSEDE 判定从「二选一」升级为「同主题且矛盾」
 
-**结论**：业界一致的范式是「写入时追加 + 检索时裁决」，不是「写入时合并」。
+**为什么**：现有判定「能并存=UPDATE，不能并存=SUPERSEDE」会把「同一实体、不同侧面、各自都真」的信息粗暴判成取代，埋掉另一侧面的洞见。
 
-## 三、实现边界
+**替代方案**：曾考虑保留二选一、只靠检索降权补救——但二选一在写入时就作废旧条目，降权无从谈起，故不可行。
 
-### 3.1 写入时：修 SUPERSEDE 判定（judgment.py）
+**做法**：`JUDGMENT_PROMPT` 明确「只有同一主题、真矛盾才 SUPERSEDE；不同侧面 = ADD/UPDATE（各自保留）」。
 
-- 在 `JUDGMENT_PROMPT` 里明确「**只有同一主题、真矛盾才 SUPERSEDE；不同侧面 = ADD/UPDATE（各自保留）**」。
-- 判定口诀从「能并存=UPDATE，不能并存=SUPERSEDE」升级为「**同主题且矛盾=SUPERSEDE，不同侧面=各自保留**」。
-- 保留 `superseded_by` / `invalid_at` 时间轴，不作废数据，只作标记。
+### 决策 2：检索接 supersede_penalty 降权，而非排除
 
-### 3.2 检索时：只加「被取代降权」（index.py）
+**为什么**：用户明确「被取代的旧结论 → 检索降权而非完全排除」；业界一致范式是「写入时追加 + 检索时裁决」（Mem0 ADD-only、SCD Type 2、多信号检索）。
 
-- 当前公式（`index.py:293`）：`score = fused × weight × recency`
-- 改造为：`score = fused × weight × recency × supersede_penalty`
-  - `supersede_penalty`：条目带 `superseded_by` 时乘一个 <1 的降权因子（**本期用可配置默认值，不写死幅度**，后续用指标调）。
-- **不排除**：被取代条目仍可召回，只是降权后靠后。
-- **不引入 importance 做检索加权**：经核对，`importance`（distill 的 1~5、judgment 的 low/medium/high）在现有设计里都是「入库前/审批时的一次性筛选阀」，且 `distill.py:125` 明确 `importance 是内部字段、不落库`。把它落库做检索排序会违背「重要性在入库时一次性裁决、入库后不保留」的既定理念；「入库后的重要度」已由 `weight`（用户显式权重 0~10）承担，检索公式已乘 `weight`。故沿用 `weight`，不新增 importance。
+**做法**：`score = fused × weight × recency × supersede_penalty`，`supersede_penalty` 为 <1 的可配置因子，不写死幅度。
 
-### 3.2.1 方案 A：superseded_by 与 invalid_at 解耦（本轮定稿）
+### 决策 3：superseded_by 与 invalid_at 解耦（方案 A）
 
-原实现里 `superseded_by` 被校验规则强制绑定 `invalid_at`（`validate.py`），而检索对带 `invalid_at` 的条目直接 `continue` 排除，导致「降权」逻辑永远执行不到——这是语义冲突的病根。
+**为什么**：原实现强制 `superseded_by` 绑定 `invalid_at`，而检索对 `invalid_at` 条目直接排除，导致「降权」逻辑永远执行不到——语义冲突的病根。
 
-**方案 A**（用户拍板）：`superseded_by` **可不带** `invalid_at`。语义区分如下：
+**替代方案**：方案 B 是保留强绑定、改检索逻辑区分——但会让字段语义更纠缠。方案 A 更清晰：两字段各管各的语义。
 
-| 字段 | 语义 | 检索表现 |
-|---|---|---|
-| 只有 `superseded_by`（无 invalid_at） | 有新版、旧版仍有效、只是被压一头 | **降权保留**（乘 supersede_penalty） |
-| 有 `invalid_at`（无论有无 superseded_by） | 真失效，历史时点后不再成立 | 非历史检索**排除**；历史时点可查 |
+**做法**：`superseded_by` 可不带 `invalid_at`（取代不失效、只降权）；`invalid_at` 仍表真失效（非历史检索排除）。`store.invalidate()` 加 `set_invalid` 参数；提案路径传 `set_invalid=False`。
 
-**代码落点**：
-- `validate.py`：删除「superseded_by 必须带 invalid_at」的强约束；区间自洽检查（invalid_at 不早于 valid_from）保留，统一处理。
-- `store.invalidate()`：新增 `set_invalid=True` 参数；`set_invalid=False` 时只标记 `superseded_by`、不写 `invalid_at`。
-- `proposal.py`：`supersede` / `merge` / `split` 三条提案路径传 `set_invalid=False`（取代不失效）。
-- `cli.py` 的 `invalidate` 命令保持默认 `set_invalid=True`（用户手动失效 = 真失效，`--by` 只是顺带记录取代者）。
+### 决策 4：不引入 importance 做检索加权
 
-### 3.3 明确不做（防过度设计）
+**为什么**：`importance`（distill 1~5、judgment low/medium/high）在现有设计里是「入库前/审批时的一次性筛选阀」，`distill.py:125` 明确不落库。把它落库做检索排序违背「重要性入库时一次性裁决、入库后不保留」的既定理念。
 
-- ❌ 不做「多维物理合并成一条」
-- ❌ 不做知识图谱（实体-关系三元组）
-- ❌ 不加固定维度枚举字段
-- ❌ 不把降权幅度本期写死（留 `settings` 可调，后期用指标定）
+**做法**：入库后重要度由 `weight`（用户显式权重 0~10）承担，检索已乘 `weight`，沿用即可。
 
-## 四、待验证 / 挂起
+## Risks / Trade-offs
 
-- **降权幅度指标**：后期需制定「该降多少」的判据（如用 access 表召回率、人工反馈），本期只留配置口子。
-
-## 五、改动文件清单（预期）
-
-| 文件 | 改动 |
-|---|---|
-| `lmr/judgment.py` | 改 SUPERSEDE 判定 prompt 逻辑 |
-| `lmr/index.py` | 检索排序接 supersede_penalty |
-| `lmr/config.py` | 加 `supersede_penalty` 可配置项 |
-| `lmr/validate.py` | 解耦 superseded_by 与 invalid_at（删除强绑定校验） |
-| `lmr/store.py` | `invalidate()` 加 `set_invalid` 参数，支持「取代不失效」 |
-| `lmr/proposal.py` | supersede/merge/split 路径传 `set_invalid=False` |
-| `tests/` | 补检索降权、取代判定的单测/集成测试 |
+- **降权幅度未标定** → 本期留 `settings` 可配置口子，后期用指标（access 召回率、人工反馈）定「该降多少」。
+- **判定口诀升级依赖 LLM 遵循 prompt** → 「不同侧面 vs 真矛盾」本质是语义判断，仍有误判风险；缓解：方向②仲裁器会再引入条件重叠检测兜底。
+- **解耦后字段语义需文档同步** → 已在 concept-glossary 与 governance spec 更新「取代不失效」语义，避免误读。

@@ -1,0 +1,3 @@
+schema: spec-driven
+created: 2026-11-16
+goal: 库内多宿主冲突仲裁：新增 host 与 applicability 维度，落地三结局裁决（候选发现+条件重叠检测+交人提案+来源信任 tie-breaker）
