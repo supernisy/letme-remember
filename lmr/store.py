@@ -25,8 +25,14 @@ invalid_at:
 superseded_by:
 boost: 1.0
 author: sample
+host: manual
 links:
 provenance:
+applicability_audience:
+applicability_scenario:
+applicability_time:
+applicability_precondition:
+applicability_extra:
 ---
 
 ## 结论
@@ -105,6 +111,14 @@ def build_candidate(raw):
         meta["valid_from"] = str(raw.get("valid_from") or today).strip()
         provenance = raw.get("provenance") or []
         meta["provenance"] = [str(item) for item in provenance]
+
+    # host：优先取显式声明的宿主并归一化；否则从 author 前缀推导。
+    host_raw = raw.get("host")
+    meta["host"] = schema.normalize_host(host_raw) or schema.infer_host_from_author(meta["author"])
+
+    # applicability：结构化适用条件（四槽 + extra）扁平化落 meta。
+    for key, value in frontmatter.applicability_to_meta(raw.get("applicability") or {}).items():
+        meta[key] = value
 
     name = str(raw.get("name") or "").strip()
     if not name and raw.get("key"):

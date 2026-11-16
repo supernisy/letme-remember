@@ -16,6 +16,7 @@ API：
   GET /api/status        服务状态（向量库/embedding/serve/开关占位）
   GET /api/audit         审计日志（最近 N 条）
   GET /api/health        问题记忆诊断（逐条健康指标）
+  GET /api/arbitrate     冲突仲裁只读扫描（候选发现 + 三结局裁决，不写不落提案）
 """
 
 from __future__ import annotations
@@ -348,6 +349,38 @@ def _memory_detail(entry_id):
     return None
 
 
+def _arbitrate():
+    """冲突仲裁只读扫描：候选发现 + 三结局裁决，只读不写、不落提案。
+
+    返回候选组数与裁决结果分布；undated 的冲突由用户在 GUI 外（或后续
+    写操作口子）走 propose/apply 流程拍板。当前只读展示，不产生提案。
+    """
+    from . import arbitrator, index as index_module
+    paths = _paths()
+    settings = config.settings_for(_data_dir())
+    result = arbitrator.scan(paths, settings, hosts=())
+    summary = {"replacement": 0, "parallel": 0, "undated": 0}
+    for adj in result["adjudications"]:
+        summary[adj["verdict"]] = summary.get(adj["verdict"], 0) + 1
+    # 候选组精简展示：成员只留 id/host/name/abstract，不暴露正文。
+    groups = []
+    for g in result["candidates"]:
+        groups.append({
+            "hosts": sorted(g["hosts"]),
+            "members": [{
+                "id": m.get("id"), "host": m.get("host"),
+                "name": m.get("name"), "abstract": m.get("abstract"),
+            } for m in g["members"]],
+        })
+    return {
+        "candidate_groups": len(groups),
+        "groups": groups,
+        "adjudications": summary,
+        "undated": [a for a in result["adjudications"] if a["verdict"] == "undated"],
+    }
+
+
+
 # ---------------------------------------------------------------------------
 # HTTP 处理
 # ---------------------------------------------------------------------------
@@ -387,6 +420,8 @@ class _Handler(BaseHTTPRequestHandler):
             elif path == "/api/audit":
                 n = int(params.get("n", ["50"])[0] or 50)
                 self._send({"items": _audit_recent(_paths(), n)})
+            elif path == "/api/arbitrate":
+                self._send(_arbitrate())
             elif path.startswith("/api/memory/"):
                 entry_id = path[len("/api/memory/"):]
                 detail = _memory_detail(entry_id)

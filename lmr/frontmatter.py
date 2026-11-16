@@ -20,10 +20,19 @@ FIELDS = (
     "superseded_by",
     "boost",  # 入库后·排序乘数（0~10）：检索时抬升这条排多靠前。旧名 weight，见 docs/concept-glossary.md
     "author",
+    "host",  # 宿主标识（归一化后）：哪来的（workbuddy/dsh/qianwen/manual），与 author 解耦
     "links",
     "provenance",
+    # applicability（适用条件）：固定四槽 + 半开放 extra 兜底，见 docs/concept-glossary.md
+    # 蒸馏时由大模型抽出结构化填值，冲突扫描时脚本做确定性比对（不判语义矛盾）。
+    # 注意 time 与 valid_from 区分：valid_from 是写入事实时间（管衰减），time 是结论适用时间窗（管冲突判定）。
+    "applicability_audience",
+    "applicability_scenario",
+    "applicability_time",
+    "applicability_precondition",
+    "applicability_extra",  # 半开放兜底：key=value 用 | 分隔，键自由、值须可读字符串
 )
-LIST_FIELDS = frozenset({"links", "provenance"})
+LIST_FIELDS = frozenset({"links", "provenance", "applicability_extra"})
 _RICH_CHARS = frozenset("[]{}")
 
 DELIM = "---"
@@ -118,6 +127,50 @@ def write_file(path, meta, body):
     from pathlib import Path
 
     Path(path).write_text(render(meta, body), encoding="utf-8")
+
+
+def applicability_to_meta(applicability):
+    """把结构化 applicability（四槽 + extra）扁平化写进 meta 字段。
+
+    applicability 形如 {"audience": ..., "scenario": ..., "time": ...,
+                       "precondition": ..., "extra": {键: 值}}。
+    四槽为空/缺省按空串落；extra 编码成 "key=value|key=value"。
+    """
+    if not isinstance(applicability, dict):
+        return {}
+    result = {}
+    for slot in ("audience", "scenario", "time", "precondition"):
+        value = applicability.get(slot)
+        result["applicability_%s" % slot] = str(value).strip() if value is not None else ""
+    extra = applicability.get("extra") or {}
+    parts = []
+    for key, value in extra.items():
+        key = str(key).strip()
+        value = str(value).strip()
+        if not key:
+            continue
+        if "=" in key or "|" in key or "|" in value:
+            raise FrontmatterError("applicability.extra 的键不能含 = 或 |，值不能含 |")
+        parts.append("%s=%s" % (key, value))
+    result["applicability_extra"] = parts
+    return result
+
+
+def meta_to_applicability(meta):
+    """把 meta 里的扁平 applicability 字段还原成结构化 dict（arbitrator 消费）。"""
+    extra = {}
+    for item in meta.get("applicability_extra") or []:
+        if "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        extra[key.strip()] = value.strip()
+    return {
+        "audience": (meta.get("applicability_audience") or "").strip(),
+        "scenario": (meta.get("applicability_scenario") or "").strip(),
+        "time": (meta.get("applicability_time") or "").strip(),
+        "precondition": (meta.get("applicability_precondition") or "").strip(),
+        "extra": extra,
+    }
 
 
 BODY_SECTIONS = ("结论", "理由")

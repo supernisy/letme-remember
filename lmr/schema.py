@@ -36,6 +36,42 @@ LEGACY_TYPE_MAP = {
 
 _FORBIDDEN = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
+# applicability（适用条件）的固定四槽 + 半开放 extra 兜底。
+# 四槽覆盖 90% 常见条件，脚本可确定性比对；extra 承载计划外条件（键自由、值须可读）。
+APPLICABILITY_SLOTS = ("audience", "scenario", "time", "precondition")
+
+
+def normalize_host(value):
+    """归一化宿主标识：去空白、转小写、去 import: 前缀。
+
+    宿主值不做封闭枚举（任何枚举框不住通用记忆），只归一化，
+    避免 WorkBuddy vs workbuddy 这类脏值。空值返回空串。
+    """
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    if text.startswith("import:"):
+        text = text[len("import:"):]
+    return text
+
+
+def infer_host_from_author(author):
+    """从 author 前缀推导 host（存量回填用）。
+
+    import:workbuddy-* / import:user-direct / user-direct 等映射：
+      workbuddy 前缀 -> workbuddy
+      user-direct / import:user-direct -> manual
+    其余无法确定的返回空串，交由人工补。
+    """
+    if not author:
+        return ""
+    text = str(author).strip()
+    if text.startswith("import:workbuddy") or text.startswith("workbuddy"):
+        return "workbuddy"
+    if "user-direct" in text:
+        return "manual"
+    return ""
+
 
 def canonical_type(value):
     """把旧类型名规范化到三类；已是三类则原样返回，未知返回 None。"""

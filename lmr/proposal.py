@@ -20,9 +20,11 @@ DETERMINISTIC = frozenset({
 })
 APPROVAL_REQUIRED = frozenset({
     "merge", "split", "supersede", "delete", "purge", "update_abstract",
+    "arbitrate",
 })
 MAX_PER_BATCH = {
     "merge": 5, "split": 3, "supersede": 5, "delete": 3, "purge": 3, "update_abstract": 5,
+    "arbitrate": 5,
 }
 
 
@@ -139,6 +141,35 @@ def _apply_one(paths, settings, data):
         if created:
             store.invalidate(paths, settings, target, superseded_by=created[0], set_invalid=False)
         return {"id": target, "split_into": created}
+    if operation == "arbitrate":
+        # 方向②：冲突裁决。payload 带裁决结果，apply 时落地。
+        #   verdict=replacement：supersede_old 标 superseded_by=superseded_by（降权不失效）
+        #   verdict=parallel：不动（各自保留）
+        #   verdict=undated：用户已裁决，按 payload 里的 choice 落地（replace_a/replace_b/keep_both）
+        verdict = payload.get("verdict", "")
+        if verdict == "replacement":
+            old_id = payload.get("supersede_old")
+            new_id = payload.get("superseded_by")
+            if old_id and new_id:
+                store.invalidate(paths, settings, old_id, superseded_by=new_id, set_invalid=False)
+            return {"verdict": "replacement", "supersede_old": old_id, "superseded_by": new_id}
+        if verdict == "parallel":
+            return {"verdict": "parallel", "kept": [target]}
+        if verdict == "undated":
+            # 用户裁决：choice 决定落地动作。
+            choice = payload.get("choice", "keep_both")
+            a_id = payload.get("a_id")
+            b_id = payload.get("b_id")
+            if choice == "replace_a":
+                # 保留 b，a 被 b 取代（降权）
+                store.invalidate(paths, settings, a_id, superseded_by=b_id, set_invalid=False)
+                return {"verdict": "undated", "choice": choice, "supersede_old": a_id, "superseded_by": b_id}
+            if choice == "replace_b":
+                store.invalidate(paths, settings, b_id, superseded_by=a_id, set_invalid=False)
+                return {"verdict": "undated", "choice": choice, "supersede_old": b_id, "superseded_by": a_id}
+            # keep_both：并存，不动。
+            return {"verdict": "undated", "choice": "keep_both", "kept": [a_id, b_id]}
+        raise ValidationError("仲裁提案缺少有效 verdict")
     raise ValidationError("未实现的操作: %s" % operation)
 
 

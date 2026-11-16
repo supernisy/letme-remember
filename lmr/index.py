@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import sqlite3
 from datetime import date, datetime
@@ -28,7 +29,8 @@ CREATE TABLE IF NOT EXISTS memories (
   hash TEXT NOT NULL,
   name TEXT, abstract TEXT, type TEXT, boost REAL,
   created TEXT, updated TEXT, valid_from TEXT, invalid_at TEXT,
-  superseded_by TEXT, author TEXT, provenance TEXT,
+  superseded_by TEXT, author TEXT, host TEXT, provenance TEXT,
+  applicability TEXT,
   body TEXT, seg TEXT, archived INTEGER DEFAULT 0
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(
@@ -70,6 +72,13 @@ class Index:
         conn = sqlite3.connect(str(self.paths.db))
         conn.row_factory = sqlite3.Row
         conn.executescript(SCHEMA_SQL)
+        # 表结构迁移：旧库的 memories 表缺 host/applicability 列时重建。
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(memories)").fetchall()]
+        if "host" not in cols or "applicability" not in cols:
+            conn.execute("DROP TABLE memories")
+            conn.execute("DROP TABLE IF EXISTS fts")
+            conn.execute("DROP TABLE IF EXISTS vec")
+            conn.executescript(SCHEMA_SQL)
         return conn
 
     def _meta(self, conn, key):
@@ -157,11 +166,19 @@ class Index:
             conn.close()
 
     def sync(self, force=False):
-        """按内容哈希增量同步；分词器版本变化时自动全量重建。"""
+        """按内容哈希增量同步；分词器版本变化或 schema 版本变化时自动全量重建。"""
         version = tokenizer.tokenizer_version()
         conn = self._connect()
         stats = {"added": 0, "updated": 0, "skipped": 0, "removed": 0}
         try:
+            # schema 版本：memories 表新增 host/applicability 列后，旧库缺列需重建。
+            schema_ver = "3"  # v3：加 host + applicability
+            if force or self._meta(conn, "schema_version") != schema_ver:
+                conn.execute("DELETE FROM fts")
+                conn.execute("DELETE FROM memories")
+                conn.execute("DELETE FROM vec")
+                self._set_meta(conn, "schema_version", schema_ver)
+                force = True
             if force or self._meta(conn, "tokenizer_version") != version:
                 conn.execute("DELETE FROM fts")
                 conn.execute("DELETE FROM memories")
@@ -180,11 +197,15 @@ class Index:
                     continue
                 meta, body = frontmatter.parse(content)
                 seg = tokenizer.segment(" ".join([meta["name"], meta["abstract"], body]))
+                applicability_json = json.dumps(
+                    frontmatter.meta_to_applicability(meta), ensure_ascii=False
+                )
                 values = (
                     entry_id, str(path), digest, meta["name"], meta["abstract"], meta["type"],
                     float(meta["boost"] or 1.0), meta["created"], meta["updated"],
                     meta["valid_from"], meta["invalid_at"], meta["superseded_by"],
-                    meta["author"], "|".join(meta["provenance"]), body, seg,
+                    meta["author"], meta["host"], "|".join(meta["provenance"]),
+                    applicability_json, body, seg,
                     1 if path.parent == self.paths.archive else 0,
                 )
                 if existing:
@@ -192,15 +213,15 @@ class Index:
                     conn.execute(
                         "UPDATE memories SET path=?, hash=?, name=?, abstract=?, type=?, boost=?, "
                         "created=?, updated=?, valid_from=?, invalid_at=?, superseded_by=?, "
-                        "author=?, provenance=?, body=?, seg=?, archived=? WHERE rowid=?",
+                        "author=?, host=?, provenance=?, applicability=?, body=?, seg=?, archived=? WHERE rowid=?",
                         values[1:] + (rowid,),
                     )
                     stats["updated"] += 1
                 else:
                     cursor = conn.execute(
                         "INSERT INTO memories(id, path, hash, name, abstract, type, boost, "
-                        "created, updated, valid_from, invalid_at, superseded_by, author, "
-                        "provenance, body, seg, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "created, updated, valid_from, invalid_at, superseded_by, author, host, "
+                        "provenance, applicability, body, seg, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         values,
                     )
                     rowid = cursor.lastrowid
@@ -318,6 +339,31 @@ class Index:
                 "ON CONFLICT(id) DO UPDATE SET count=count+1, last_at=excluded.last_at",
                 (entry_id, now),
             )
+
+    def list_all(self):
+        """全量列出活跃记忆的元数据（含 host / applicability），供仲裁候选发现用。
+
+        只读路径，零模型零网络。返回按 id 排序的字典列表。
+        """
+        self.sync()
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT id, name, abstract, type, host, valid_from, invalid_at, "
+                "superseded_by, applicability FROM memories "
+                "WHERE archived=0 ORDER BY id"
+            ).fetchall()
+            result = []
+            for row in rows:
+                item = dict(row)
+                try:
+                    item["applicability"] = json.loads(row["applicability"] or "{}")
+                except ValueError:
+                    item["applicability"] = {}
+                result.append(item)
+            return result
+        finally:
+            conn.close()
 
     def access_stats(self, entry_id=None):
         """读访问统计：单条或全量（count 降序）。供 GUI 健康页读。"""

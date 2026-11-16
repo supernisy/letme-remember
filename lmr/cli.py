@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from . import config, distill, importprep, index, proposal, queue, store
+from . import arbitrator
 from . import llm as llm_module
 from . import judgment
 from . import host as host_module
@@ -143,10 +144,18 @@ def _build_parser():
     prep_cmd.add_argument("--batch", default="", help="导入批次标识（可选）")
 
     propose = sub.add_parser("propose", parents=[common], help="生成内容变更类审批提案")
-    propose.add_argument("op", nargs="?", help="merge/split/supersede/delete/purge/update_abstract")
+    propose.add_argument("op", nargs="?", help="merge/split/supersede/delete/purge/update_abstract/arbitrate")
     propose.add_argument("target", nargs="?", help="目标条目定位标识")
     propose.add_argument("--payload", help="附加参数的 JSON 字符串")
     propose.add_argument("--batch-file", dest="batch_file", help="批量提案的 JSON 数组文件")
+
+    arbitrate_cmd = sub.add_parser(
+        "arbitrate", parents=[common],
+        help="库内多宿主冲突仲裁扫描：候选发现 + 条件重叠 + 三结局裁决（零模型零网络）")
+    arbitrate_cmd.add_argument("--host", dest="hosts", action="append", default=[],
+                               help="只扫描指定宿主（可多次）；省略则全量")
+    arbitrate_cmd.add_argument("--propose", action="store_true",
+                               help="把 undated（需交人）的冲突生成为仲裁提案")
 
     apply_cmd = sub.add_parser("apply", parents=[common], help="确认并应用一份提案")
     apply_cmd.add_argument("proposal_id")
@@ -532,6 +541,46 @@ def cmd_propose(args):
     return proposal.create(paths, args.op, args.target, payload)
 
 
+def cmd_arbitrate(args):
+    paths, settings = _paths(args)
+    result = arbitrator.scan(paths, settings, hosts=args.hosts or ())
+
+    # 汇总：replacement 静默（降权）、parallel 并存、undated 交人。
+    summary = {"replacement": 0, "parallel": 0, "undated": 0}
+    undated = []
+    for adj in result["adjudications"]:
+        verdict = adj["verdict"]
+        summary[verdict] = summary.get(verdict, 0) + 1
+        if verdict == arbitrator.UNDATED:
+            undated.append(adj)
+
+    out = {
+        "candidate_groups": len(result["candidates"]),
+        "adjudications": summary,
+        "undated_count": len(undated),
+        "undated": undated,
+    }
+
+    # --propose：把 undated 的冲突生成为仲裁提案，交用户裁决。
+    if args.propose and undated:
+        items = []
+        for adj in undated:
+            items.append({
+                "op": "arbitrate",
+                "target": adj.get("a_id") or adj.get("b_id") or "",
+                "payload": {
+                    "verdict": "undated",
+                    "a_id": adj.get("a_id"),
+                    "b_id": adj.get("b_id"),
+                    "a_host": adj.get("a_host"),
+                    "b_host": adj.get("b_host"),
+                },
+            })
+        out["proposals"] = proposal.create_batch(paths, items)
+
+    return out
+
+
 def cmd_apply(args):
     paths, settings = _paths(args)
     return proposal.apply(paths, settings, args.proposal_id)
@@ -654,6 +703,7 @@ HANDLERS = {
     "distill-chunk": cmd_distill_chunk,
     "import-preprocess": cmd_import_preprocess,
     "propose": cmd_propose,
+    "arbitrate": cmd_arbitrate,
     "apply": cmd_apply,
     "proposals": cmd_proposals,
     "undo": cmd_undo,
