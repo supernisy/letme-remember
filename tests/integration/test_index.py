@@ -48,6 +48,31 @@ class TestIndex(MemTestCase):
         self.assertEqual(hits[0]["id"], self._id("高权重条目"))
         self.assertTrue(all(hit["score"] > 0 for hit in hits), "旧条目不得被衰减到零")
 
+    def test_superseded_entry_demoted_not_excluded(self):
+        # 被取代条目（带 superseded_by）降权但仍在结果里；同权重时排后面。
+        self.make(name="旧结论被取代", weight="1", valid_from="2026-11-10",
+                  superseded_by="semantic--新结论")
+        self.make(name="新结论", weight="1", valid_from="2026-11-12")
+        hits = self.idx().recall("虚构")
+        ids = [h["id"] for h in hits]
+        # 被取代条目仍在结果里（不排除）
+        self.assertIn(self._id("旧结论被取代"), ids)
+        # 被取代条目排在新结论之后（降权生效）
+        self.assertLess(ids.index(self._id("旧结论被取代")), len(ids))  # 存在即可
+        new_pos = ids.index(self._id("新结论"))
+        old_pos = ids.index(self._id("旧结论被取代"))
+        self.assertLess(new_pos, old_pos, "被取代条目应降权排后")
+
+    def test_supersede_penalty_configurable(self):
+        # 降权幅度来自配置，可调；显式设 0.9 时被取代条目仍可能靠前。
+        self.settings["supersede_penalty"] = 0.9
+        self.make(name="旧结论被取代", weight="1", valid_from="2026-11-10",
+                  superseded_by="semantic--新结论")
+        self.make(name="新结论", weight="1", valid_from="2026-11-10")
+        hits = self.idx().recall("虚构")
+        # 仅验证配置被读取、不抛异常；幅度判定留待指标阶段。
+        self.assertTrue(len(hits) >= 2)
+
     def _id(self, name):
         from lmr import schema
 

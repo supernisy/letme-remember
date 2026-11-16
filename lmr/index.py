@@ -290,7 +290,11 @@ class Index:
                 sem = semantic.get(rowid, 0.0)
                 sw = float(self.settings.get("semantic_weight", 0.5))
                 fused = (1.0 - sw) * rel + sw * (0.5 + 0.5 * sem)
-                score = fused * float(row["weight"]) * self._recency(row["valid_from"], as_of_date)
+                # 被取代条目（带 superseded_by）降权，但不排除；幅度由配置控制，后期用指标调。
+                penalty = 1.0
+                if row["superseded_by"]:
+                    penalty = float(self.settings.get("supersede_penalty", 0.5))
+                score = fused * float(row["weight"]) * self._recency(row["valid_from"], as_of_date) * penalty
                 results.append({
                     "id": row["id"], "abstract": row["abstract"], "type": row["type"],
                     "score": round(score, 6), "path": row["path"],

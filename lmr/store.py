@@ -225,10 +225,18 @@ def list_entries(paths):
     return paths.memory_md.read_text(encoding="utf-8")
 
 
-def invalidate(paths, settings, entry_id, superseded_by=None, invalid_at=None):
+def invalidate(paths, settings, entry_id, superseded_by=None, invalid_at=None, set_invalid=True):
+    """标记条目失效或被取代。
+
+    set_invalid=False 用于「取代但不失效」（方案 A）：只标记 superseded_by，
+    不写 invalid_at，旧结论在检索时降权保留而非排除，符合「不同侧面各自保留」。
+    """
     path = _find_file(paths, entry_id)
     meta, body = frontmatter.read_file(path)
-    meta["invalid_at"] = invalid_at or _now().date().isoformat()
+    if set_invalid:
+        meta["invalid_at"] = invalid_at or _now().date().isoformat()
+    elif invalid_at:
+        meta["invalid_at"] = invalid_at
     meta["updated"] = _now().isoformat()
     if superseded_by:
         meta["superseded_by"] = superseded_by

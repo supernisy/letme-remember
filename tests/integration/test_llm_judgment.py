@@ -14,6 +14,20 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
+class TestSupersedePrompt(unittest.TestCase):
+    """方向①：SUPERSEDE 判定 prompt 必须先问「同一主题」再问「矛盾」。"""
+
+    def test_prompt_contains_same_topic_guard(self):
+        prompt = judgment.build_prompt({"abstract": "x", "conclusion": "y"}, [])
+        self.assertIn("同一主题", prompt)
+        self.assertIn("不同侧面", prompt)
+
+    def test_prompt_orders_topic_then_contradiction(self):
+        prompt = judgment.build_prompt({"abstract": "x", "conclusion": "y"}, [])
+        # 先问主题、再问矛盾，保证不同侧面不误判取代。
+        self.assertLess(prompt.index("同一主题"), prompt.index("语义矛盾"))
+
+
 class TestParseReport(unittest.TestCase):
     def test_parse_clean_json(self):
         raw = '{"conflict": true, "importance": "high", "confidence": "high", "missing": ""}'

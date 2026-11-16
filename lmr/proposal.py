@@ -116,7 +116,8 @@ def _apply_one(paths, settings, data):
         # 真删除：物理移除错误/无效记忆，不可逆，走审批（L2）。
         return store.purge(paths, settings, target, reason=payload.get("reason", ""))
     if operation == "supersede":
-        return store.invalidate(paths, settings, target, superseded_by=payload.get("by"))
+        # 方案 A：取代不失效，旧结论只降权保留，检索时按 supersede_penalty 压一头。
+        return store.invalidate(paths, settings, target, superseded_by=payload.get("by"), set_invalid=False)
     if operation == "update_abstract":
         raw = _raw_from_file(paths, target)
         raw["abstract"] = payload.get("abstract", raw["abstract"])
@@ -129,14 +130,14 @@ def _apply_one(paths, settings, data):
         merged = store.record(paths, settings, raw)
         merged_id = merged["id"]
         for source in payload.get("from", []):
-            store.invalidate(paths, settings, source, superseded_by=merged_id)
+            store.invalidate(paths, settings, source, superseded_by=merged_id, set_invalid=False)
         return {"id": merged_id, "merged_from": payload.get("from", [])}
     if operation == "split":
         created = []
         for raw in payload.get("new", []):
             created.append(store.record(paths, settings, raw)["id"])
         if created:
-            store.invalidate(paths, settings, target, superseded_by=created[0])
+            store.invalidate(paths, settings, target, superseded_by=created[0], set_invalid=False)
         return {"id": target, "split_into": created}
     raise ValidationError("未实现的操作: %s" % operation)
 

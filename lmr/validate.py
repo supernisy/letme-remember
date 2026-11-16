@@ -64,8 +64,10 @@ def validate_meta(meta, body):
         if parsed["invalid_at"] < parsed["valid_from"]:
             errors.append("invalid_at 早于 valid_from")
 
-    if meta["superseded_by"] and not meta["invalid_at"]:
-        errors.append("声明了 superseded_by 却缺少 invalid_at 失效区间")
+    # 方案 A：superseded_by 与 invalid_at 解耦。
+    # superseded_by 表示「有新版、旧版仍有效、只是被压一头」，检索时降权而非排除，
+    # 因此不再强制要求带 invalid_at；invalid_at 保留独立语义（真失效）。
+    # 区间自洽检查（invalid_at 不早于 valid_from）已在上方第 63-65 行统一处理。
 
     try:
         weight = float(meta["weight"])

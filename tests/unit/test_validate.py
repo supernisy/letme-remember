@@ -43,10 +43,9 @@ class TestValidate(unittest.TestCase):
         )))
 
     def test_superseded_without_invalidation(self):
-        # @req 2.2
-        self.assertTrue(any("superseded_by" in item for item in errors_for(
-            superseded_by="另一条"
-        )))
+        # @req 2.2（方案 A：superseded_by 与 invalid_at 解耦）
+        # 被取代但未失效（有新版、旧版仍有效、只是被压一头）应合法，检索时降权而非排除。
+        self.assertEqual(errors_for(superseded_by="另一条"), [])
 
     def test_weight_out_of_range(self):
         # @req 2.2

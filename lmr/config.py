@@ -27,6 +27,8 @@ DEFAULT_SETTINGS = {
     "recency_half_life_days": 90.0,
     "recency_floor": 0.1,
     "recency_decay_base": 0.5,
+    # 被取代条目（带 superseded_by）在检索时的降权因子，<1；幅度后期用指标调
+    "supersede_penalty": 0.5,
     "weight_min": 0.0,
     "weight_max": 10.0,
     "allowlist_extra": [],
